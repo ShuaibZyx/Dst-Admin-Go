@@ -30,3 +30,6 @@ Ruling: 四功能集中 GezigeTools 页而非分散挂 ShareConfig/System/Level2
 Task 4-7: minor (deferred): System/LuaJIT Tab、ShareConfig 直连卡片迁回、侧栏菜单入口、i18n key
 Task 8 (进行中): go build/test/vet 全绿（6 包）；前端 vite build 通过；冒烟：面板启动 /hello 正常，/api/health/check 鉴权 401 生效
 Task 8: 全分支审查已派发（9 commits review diff 130KB），等待 reviewer 结果后做修复 pass
+Final: 修复 pass 完成（C1-C3 Critical、I1-I4/I6-I9 Important、M1/M4/M5/M6/M9/M12）；reviewer 裁定异议已全部处理（B18 收回、I1 落地、I5/I7 补齐）
+Final: 验证 go build/vet/test 6包全绿；前端 vite build 通过；两仓库已提交
+Task 8: complete
