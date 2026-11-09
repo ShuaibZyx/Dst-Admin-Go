@@ -1,6 +1,10 @@
 package api
 
 import (
+	"dst-admin-go/config/database"
+	"dst-admin-go/model"
+	"os"
+	"dst-admin-go/utils/netUtils"
 	"crypto/rand"
 	"dst-admin-go/config/global"
 	"dst-admin-go/utils/clusterUtils"
@@ -207,4 +211,66 @@ func (s *ShareApi) ImportClusterConfig(ctx *gin.Context) {
 		Data: nil,
 	})
 
+}
+
+
+// DirectConnect 直连代码（IP 三态 x 外部端口）
+// external_port（KV，可空）：NAT/FRP 映射端口，空则用世界 server_port
+func (s *ShareApi) DirectConnect(ctx *gin.Context) {
+	cluster := clusterUtils.GetClusterFromGin(ctx)
+	clusterName := cluster.ClusterName
+	levelName := ctx.DefaultQuery("levelName", "Master")
+
+	var modeKv, ipKv model.KV
+	database.DB.Where("key = ?", "ip_mode").Find(&modeKv)
+	database.DB.Where("key = ?", "external_ip").Find(&ipKv)
+	mode := modeKv.Value
+	if mode == "" {
+		mode = netUtils.ModeAutoDetect
+	}
+	ip, err := netUtils.ResolveIP(mode, ipKv.Value)
+	if err != nil {
+		ip, err = netUtils.ResolveIP(netUtils.ModeBind, "") // 自动探测失败降级
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, vo.Response{Code: 500, Msg: "IP 解析失败: " + err.Error()})
+			return
+		}
+	}
+
+	iniPath := filepath.Join(dstUtils.GetClusterBasePath(clusterName), levelName, "server.ini")
+	ini, _ := os.ReadFile(iniPath)
+	internalPort := 0
+	for _, line := range strings.Split(string(ini), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToLower(line), "server_port") {
+			fmt.Sscanf(line[strings.Index(line, "=")+1:], "%d", &internalPort)
+		}
+	}
+	if internalPort == 0 {
+		internalPort = 10999
+	}
+	externalPort := internalPort
+	var extKv model.KV
+	database.DB.Where("key = ?", "external_port").Find(&extKv)
+	if extKv.Value != "" {
+		fmt.Sscanf(extKv.Value, "%d", &externalPort)
+	}
+
+	cb, _ := os.ReadFile(dstUtils.GetClusterIniPath(clusterName))
+	password := ""
+	for _, line := range strings.Split(string(cb), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToLower(line), "cluster_password") {
+			password = strings.TrimSpace(line[strings.Index(line, "=")+1:])
+		}
+	}
+
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{
+		"ip":           ip,
+		"internalPort": internalPort,
+		"externalPort": externalPort,
+		"password":     password,
+		"cConnectCode": netUtils.FormatCConnect(ip, externalPort, password),
+		"steamUrl":     netUtils.FormatSteamURL(ip, externalPort, password),
+	}})
 }
