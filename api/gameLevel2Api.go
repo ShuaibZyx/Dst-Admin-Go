@@ -155,6 +155,7 @@ func startBefore(ctx *gin.Context) {
 		})
 		return
 	}
+	ApplyLuaJit(cluster.ClusterName) // LuaJIT 开关一致性
 	copyOsFile()
 }
 
