@@ -1,6 +1,8 @@
 package api
 
 import (
+	"dst-admin-go/utils/dstUtils"
+	"dst-admin-go/service/healthCheck"
 	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
@@ -139,6 +141,20 @@ func (g *GameLevel2Api) GetStatus(ctx *gin.Context) {
 }
 
 func startBefore(ctx *gin.Context) {
+	// 体检闸门：仅手动开服路径（定时/自动拉起不走这里）
+	cluster := clusterUtils.GetClusterFromGin(ctx)
+	basePath := dstUtils.GetClusterBasePath(cluster.ClusterName)
+	items := healthCheck.Run(basePath)
+	saveHealthLast(items)
+	force := ctx.Query("force") == "true" || ctx.Query("force") == "1"
+	if HealthHasError(items) && HealthStrictEnabled() && !force {
+		ctx.AbortWithStatusJSON(http.StatusConflict, vo.Response{
+			Code: 409,
+			Msg:  "体检未通过（严格模式）：存在 error 级问题。修复后重试，或带 force=true 强制启动",
+			Data: items,
+		})
+		return
+	}
 	copyOsFile()
 }
 
@@ -202,6 +218,9 @@ func (g *GameLevel2Api) Start(ctx *gin.Context) {
 	clusterName := cluster.ClusterName
 
 	startBefore(ctx)
+	if ctx.IsAborted() {
+		return
+	}
 
 	gameService.StartLevel(clusterName, levelName, bin, beta)
 

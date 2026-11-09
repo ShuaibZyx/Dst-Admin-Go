@@ -17,3 +17,6 @@ Task 1: minor (deferred): 定时任务中途 panic 留下“已停服未启动�
 Task 2: complete (commits 9966c8d..a9467c1, tests: go test ./... → ok 2 pkgs)
 Task 2: Ruling: gameService 内部三函数 level 校验正则未匹配（签名差异）— 依赖 API 层 ValidName 入口防线 — cost if wrong: 内部调用路径漏防
 Task 2: minor (deferred): Steam API key 仍为常量（可配置化待后续）；A3 shell 参数 Quote 仅接线 helper 与部分入口
+Task 3: complete (commits a9467c1..HEAD, tests: go test ./... → ok 2 pkgs)
+Task 3: Ruling: C5 注释插入括号内曾致语法错误 — 替换脚本注释位置教训 — cost if wrong: 无
+Task 3: minor (deferred): B17 steamcmd 更新命令仍为 cmd 字符串拼接（已加引号）；C4 缺 config.yml 报错信息、C7 arr 长度校验未做

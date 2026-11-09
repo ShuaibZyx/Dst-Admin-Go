@@ -55,6 +55,7 @@ func NewRoute() *gin.Engine {
 	initWebhookRouter(router)
 
 	initLevel2(router)
+	initHealthRouter(router)
 
 	initFile(router)
 	initDstGenMapRouter(router)
