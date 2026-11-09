@@ -162,7 +162,7 @@ func (s *ShareApi) ShareClusterConfig(ctx *gin.Context) {
 	adminlist, _ := fileUtils.ReadFile(dstUtils.GetAdminlistPath(clusterName))
 	blocklist, _ := fileUtils.ReadFile(dstUtils.GetBlocklistPath(clusterName))
 	whitelist, _ := fileUtils.ReadFile(dstUtils.GetWhitelistPath(clusterName))
-	levelJson, _ := fileUtils.ReadFile(filepath.Join(dstUtils.GetClusterBasePath(clusterName), "level.json") // C5)
+	levelJson, _ := fileUtils.ReadFile(filepath.Join(dstUtils.GetClusterBasePath(clusterName), "level.json")) // C5
 
 	shareCluster.ClusterIni = clusterIni
 	shareCluster.ClusterToken = clusterToken
