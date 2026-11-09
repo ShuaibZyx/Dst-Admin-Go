@@ -1,0 +1,38 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/dist
+/dst
+.idea
+
+first
+dst-admin-go
+dst-admin-go.exe
+dst-admin-go.log
+dst-db
+password.txt
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+.vscode
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+#py-dst-cli
+/py-dst-cli/__pycache__
+/py-dst-cli/data
+
+/test
