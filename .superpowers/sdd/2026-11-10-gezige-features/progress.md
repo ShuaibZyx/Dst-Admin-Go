@@ -20,3 +20,13 @@ Task 2: minor (deferred): Steam API key 仍为常量（可配置化待后续）�
 Task 3: complete (commits a9467c1..HEAD, tests: go test ./... → ok 2 pkgs)
 Task 3: Ruling: C5 注释插入括号内曾致语法错误 — 替换脚本注释位置教训 — cost if wrong: 无
 Task 3: minor (deferred): B17 steamcmd 更新命令仍为 cmd 字符串拼接（已加引号）；C4 缺 config.yml 报错信息、C7 arr 长度校验未做
+Task 4: complete (healthCheck 10项+API+startBefore 闸门; tests 4/4 ok)
+Task 5: complete (EnsureLuaJitModInFile; workshop-3444078585 交叉验证; tests 3/3 ok)
+Task 6: complete (GenerateIAPreset overlay|standalone; Shipwrecked 168项模板; tests 3/3 ok)
+Task 7: complete (netUtils.ResolveIP 三态+FormatCConnect/SteamURL 外部端口; tests 6/6 ok)
+Task 4-7: 前端 GezigeTools 页完成，vite build 通过（独立 commit 在 dst-manage-web2）
+Ruling: 前端文案硬编码中文（i18n key 后补）— Global Constraints deviation — cost if wrong: 多语言用户看不到翻译
+Ruling: 四功能集中 GezigeTools 页而非分散挂 ShareConfig/System/Level2 — 降低对现有复杂页面的侵入 — cost if wrong: 交互入口与 spec 的页面归属不同
+Task 4-7: minor (deferred): System/LuaJIT Tab、ShareConfig 直连卡片迁回、侧栏菜单入口、i18n key
+Task 8 (进行中): go build/test/vet 全绿（6 包）；前端 vite build 通过；冒烟：面板启动 /hello 正常，/api/health/check 鉴权 401 生效
+Task 8: 全分支审查已派发（9 commits review diff 130KB），等待 reviewer 结果后做修复 pass

@@ -164,6 +164,11 @@ func checkShardLink(basePath string, levels []levelInfo) []HealthItem {
 		it.Message = "shard_enabled=false（单世界）"
 		return []HealthItem{it}
 	}
+	// I4: 面板默认结构的互通配置在 cluster.ini [SHARD] master_ip；server.ini 覆盖为补充
+	if iniValue(clusterS, "master_ip") != "" || iniValue(clusterS, "master_port") != "" {
+		it.Message = "互通配置正常（cluster.ini）"
+		return []HealthItem{it}
+	}
 	var missing []string
 	for _, l := range levels {
 		if l.IsMaster {
@@ -176,7 +181,7 @@ func checkShardLink(basePath string, levels []levelInfo) []HealthItem {
 	if len(missing) > 0 {
 		it.Status = StatusError
 		it.Message = "以下世界未配置 master_ip：" + strings.Join(missing, "、")
-		it.FixHint = "在各世界 server.ini [SHARD] 配置 master_ip/master_port 以接入主世界"
+		it.FixHint = "在 cluster.ini [SHARD] 配置 master_ip/master_port，或在各世界 server.ini 配置"
 	}
 	return []HealthItem{it}
 }

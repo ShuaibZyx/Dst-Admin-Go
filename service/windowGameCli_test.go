@@ -1,6 +1,9 @@
 package service
 
 import (
+	"dst-admin-go/utils/shellUtils"
+	"strings"
+	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -49,5 +52,34 @@ func TestStartLogCreateFailureDoesNotDeadlock(t *testing.T) {
 	}
 	if inst.Status() {
 		t.Fatal("Start() 失败后 running 仍为 true(A2)")
+	}
+}
+
+type bufWC struct{ b *bytes.Buffer }
+
+func (w bufWC) Write(p []byte) (int, error) { return w.b.Write(p) }
+func (w bufWC) Close() error                { return nil }
+
+
+// I1: Send 原样透传 + 换行
+func TestSendPassthrough(t *testing.T) {
+	buf := &bytes.Buffer{}
+	inst := &LevelInstance{stdin: bufWC{buf}}
+	if err := inst.Send("c_announce(\"hi\")"); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "c_announce(\"hi\")\n" {
+		t.Fatalf("Send 应原样透传，实际 %q", buf.String())
+	}
+}
+
+// I1: EscapeLuaStr 阻断注入
+func TestEscapeLuaStr(t *testing.T) {
+	got := shellUtils.EscapeLuaStr("a") + shellUtils.EscapeLuaStr("\"") + shellUtils.EscapeLuaStr("'") + shellUtils.EscapeLuaStr("x\ny")
+	if strings.ContainsAny(got, "\n\r") {
+		t.Fatalf("换行应被移除: %q", got)
+	}
+	if !strings.Contains(got, "\\\"") {
+		t.Fatalf("引号应被转义: %q", got)
 	}
 }

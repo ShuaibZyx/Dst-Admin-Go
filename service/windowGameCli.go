@@ -142,6 +142,7 @@ func (receiver *LevelInstance) setStopped() {
 	receiver.lock.Lock()
 	defer receiver.lock.Unlock()
 	receiver.running.Store(false)
+	receiver.pid = 0 // I9: 清除 pid，防止误杀复用 PID 的无关进程
 }
 
 func (receiver *LevelInstance) Start() {
@@ -213,8 +214,10 @@ func (receiver *LevelInstance) Start() {
 		_ = logFile.Close()
 		return
 	}
+	receiver.lock.Lock()
 	receiver.stdin = stdin
 	receiver.stdout = stdout
+	receiver.lock.Unlock()
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Error starting command: %v\n", err)
@@ -278,6 +281,13 @@ func (receiver *LevelInstance) Kill() {
 		log.Println("kill: process not found", pid)
 		return
 	}
+	// I9: 校验目标确为本游戏进程再杀（防 PID 复用误杀）
+	if proc, err := process.NewProcess(int32(pid)); err == nil {
+		if name, _ := proc.Name(); name != "" && !strings.Contains(strings.ToLower(name), "dontstarve") {
+			log.Println("kill skipped, pid reused by:", name)
+			return
+		}
+	}
 	if err := p.Kill(); err != nil {
 		log.Println("kill error", err)
 	}
@@ -292,7 +302,7 @@ func (receiver *LevelInstance) Send(cmd string) error {
 	writer := bufio.NewWriter(receiver.stdin)
 	log.Println("cmd: ", cmd)
 	// B13: 仅还原转义引号（\\\" -> \"），不再全局删除反斜杠（会破坏路径与转义）
-	cmd = strings.ReplaceAll(cmd, "\\\\\"", "\"")
+	// I1: 原样透传；Lua 转义由构造端 shellUtils.EscapeLuaStr 负责
 	input := cmd + "\n"
 	_, err := writer.WriteString(input)
 	if err != nil {

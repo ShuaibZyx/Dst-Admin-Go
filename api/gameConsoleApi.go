@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
 	"dst-admin-go/utils/clusterUtils"
@@ -282,6 +283,14 @@ func (g *GameConsoleApi) OperatePlayer(ctx *gin.Context) {
 
 	otype := ctx.Param("type")
 	kuId := ctx.Param("kuId")
+	if otype != "0" && otype != "1" && otype != "2" { // I1/M13
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal type"})
+		return
+	}
+	if strings.ContainsAny(kuId, "\\\"" + string(rune(10)) + string(rune(13)) + "$;") { // I1
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal kuId"})
+		return
+	}
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
@@ -301,7 +310,10 @@ func (g *GameConsoleApi) RestoreBackup(ctx *gin.Context) {
 
 	backupName := ctx.Query("backupName")
 
-	backupService.RestoreBackup(ctx, backupName)
+	if err := backupService.RestoreBackup(ctx, backupName); err != nil {
+		ctx.JSON(http.StatusInternalServerError, vo.Response{Code: 500, Msg: "restore failed: " + err.Error()})
+		return // I3: 恢复失败不再假报成功
+	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -419,18 +431,24 @@ func (g *GameConsoleApi) DownloadDstLogFile(ctx *gin.Context) {
 		log.Panicln("levelName 不能为空")
 	}
 
+	if !fileUtils.ValidName(levelName) || strings.ContainsAny(fileName, "/\\") || strings.Contains(fileName, "..") {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal path"})
+		return
+	}
 	filePath := filepath.Join(dstUtils.GetClusterBasePath(clusterName), levelName, fileName)
-	//打开文件
-	_, err := os.Open(filePath)
-	//非空处理
-	if err != nil {
-		log.Panicln("download filePath error", err)
+	if !strings.HasPrefix(filepath.Clean(filePath), filepath.Clean(dstUtils.GetClusterBasePath(clusterName))) {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal path"})
+		return // I2: 防路径穿越
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		log.Println("download filePath error", err)
+		ctx.JSON(http.StatusNotFound, vo.Response{Code: 404, Msg: "file not found"})
+		return
 	}
 	ctx.Header("Content-Type", "application/octet-stream")
 	ctx.Header("Content-Disposition", "attachment; filename="+fileName)
 	ctx.Header("Content-Transfer-Encoding", "binary")
-	// c.Header("Content-Length", strconv.FormatInt(f.Size(), 10))
-	ctx.File(filePath)
+	ctx.File(filePath) // I2: 不再预开句柄
 }
 
 func (g *GameConsoleApi) DownloadServerLogFile(ctx *gin.Context) {

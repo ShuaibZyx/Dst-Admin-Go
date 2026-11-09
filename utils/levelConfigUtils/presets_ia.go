@@ -52,8 +52,14 @@ func GenerateIAPreset(mode string) []level.World {
 		Uuid:              fmt.Sprintf("ia-shipwrecked-%s", mode),
 		Leveldataoverride: shipwreckedLevelData,
 		Modoverrides:      iaModoverrides(true),
-		ServerIni: &level.ServerIni{
-			Name: "Shipwrecked",
+		ServerIni: &level.ServerIni{ // C2: 完整 server.ini 字段（零值端口会导致世界无法启动）
+			Name:             "Shipwrecked",
+			Id:               2,
+			ServerPort:       10997,
+			IsMaster:         swMaster,
+			EncodeUserPath:   true,
+			MasterServerPort: 18998,
+			AuthenticationPort: 18767,
 		},
 	}
 	vol := level.World{
@@ -63,7 +69,13 @@ func GenerateIAPreset(mode string) []level.World {
 		Leveldataoverride: volcanoLevelData,
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{
-			Name: "Volcano",
+			Name:             "Volcano",
+			Id:               3,
+			ServerPort:       10996,
+			IsMaster:         false,
+			EncodeUserPath:   true,
+			MasterServerPort: 18999,
+			AuthenticationPort: 18768,
 		},
 	}
 	return []level.World{sw, vol}

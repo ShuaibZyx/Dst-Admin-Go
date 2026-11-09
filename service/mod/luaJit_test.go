@@ -63,3 +63,19 @@ func TestEnsureLuaJitKeepsExistingMods(t *testing.T) {
 		t.Fatalf("应追加 luajit 模组，实际: %s", s)
 	}
 }
+
+func TestEnsureLuaJitDisableWithConfigOptionsFirst(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "modoverrides.lua")
+	orig := "return { [\"workshop-3444078585\"] = { configuration_options = { x = 1 }, enabled = true } }"
+	if err := os.WriteFile(p, []byte(orig), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureLuaJitModInFile(p, false); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if strings.Contains(string(b), "enabled = true") || strings.Contains(string(b), "enabled=true") {
+		t.Fatalf("禁用必须生效（不得残留 enabled=true），实际: %s", b)
+	}
+}

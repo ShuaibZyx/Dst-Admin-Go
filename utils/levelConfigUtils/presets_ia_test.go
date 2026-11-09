@@ -48,3 +48,20 @@ func TestGenerateIAPresetRejectsUnknownMode(t *testing.T) {
 		t.Fatalf("未知模式应返回 nil，实际 %+v", worlds)
 	}
 }
+
+func TestGenerateIAPresetServerIniComplete(t *testing.T) {
+	worlds := GenerateIAPreset("standalone")
+	sw, vol := worlds[0], worlds[1]
+	if sw.ServerIni.ServerPort == 0 || sw.ServerIni.MasterServerPort == 0 || sw.ServerIni.AuthenticationPort == 0 {
+		t.Fatalf("server.ini 端口不得为零值: %+v", sw.ServerIni)
+	}
+	if vol.ServerIni.ServerPort == 0 || vol.ServerIni.MasterServerPort == 0 || vol.ServerIni.AuthenticationPort == 0 {
+		t.Fatalf("server.ini 端口不得为零值: %+v", vol.ServerIni)
+	}
+	if !sw.ServerIni.IsMaster {
+		t.Fatal("standalone 模式 ServerIni.IsMaster 应为 true（落盘判定依据）")
+	}
+	if sw.ServerIni.ServerPort == vol.ServerIni.ServerPort || sw.ServerIni.Id == vol.ServerIni.Id {
+		t.Fatal("两世界端口/id 应互不相同")
+	}
+}

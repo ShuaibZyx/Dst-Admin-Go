@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"path/filepath"
 	"dst-admin-go/service"
 	"dst-admin-go/utils/dstUtils"
@@ -132,8 +133,8 @@ func wsReader(ws *websocket.Conn, done *int32) {
 			}
 			filename := strings.TrimSpace(split[1])
 			cleanName := filepath.Clean(filename)
-			kleiRoot := filepath.Clean(dstUtils.GetKleiDstPath())
-			if !strings.HasPrefix(cleanName, kleiRoot) {
+			kleiRoot := filepath.Clean(dstUtils.GetKleiDstPath()) + string(os.PathSeparator) // M5: 尾分隔符防兄弟目录绕过
+			if !strings.HasPrefix(cleanName+string(os.PathSeparator), kleiRoot) && !strings.HasPrefix(cleanName, kleiRoot) {
 				log.Println("tailf blocked outside klei dir:", filename)
 				continue // A4: 仅允许存档目录内文件
 			}

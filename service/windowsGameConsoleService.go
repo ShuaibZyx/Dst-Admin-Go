@@ -3,6 +3,7 @@ package service
 import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/shellUtils"
 	"fmt"
 	"log"
 	"path"
@@ -13,12 +14,12 @@ type WindowsGameConsoleService struct {
 	WindowsGameService
 }
 
+// I1: 所有进游戏控制台的字符串经 shellUtils.EscapeLuaStr 转义，防注入第二条命令
+
 func (c *WindowsGameConsoleService) SentBroadcast2(clusterName string, levelName string, message string) {
 
 	if c.GetLevelStatus(clusterName, levelName) {
-		broadcast := "c_announce(\\\""
-		broadcast += message
-		broadcast += "\\\")"
+		broadcast := "c_announce(\"" + shellUtils.EscapeLuaStr(message) + "\")"
 		log.Println(broadcast)
 		clusterContainer.Send(clusterName, levelName, broadcast)
 	}
@@ -28,9 +29,7 @@ func (c *WindowsGameConsoleService) SentBroadcast2(clusterName string, levelName
 func (c *WindowsGameConsoleService) SentBroadcast(clusterName string, message string) {
 
 	if c.GetLevelStatus(clusterName, "Master") {
-		broadcast := "c_announce(\\\""
-		broadcast += message
-		broadcast += "\\\")"
+		broadcast := "c_announce(\"" + shellUtils.EscapeLuaStr(message) + "\")"
 		log.Println(broadcast)
 		clusterContainer.Send(clusterName, "Master", broadcast)
 	}
@@ -38,18 +37,18 @@ func (c *WindowsGameConsoleService) SentBroadcast(clusterName string, message st
 }
 
 func (c *WindowsGameConsoleService) KickPlayer(clusterName, KuId string) {
-	masterCMD := "TheNet:Kick(\\\"" + KuId + "\\\")"
+	masterCMD := "TheNet:Kick(\"" + shellUtils.EscapeLuaStr(KuId) + "\")"
 	clusterContainer.Send(clusterName, "Master", masterCMD)
 }
 
 func (c *WindowsGameConsoleService) KillPlayer(clusterName, KuId string) {
-	masterCMD := "UserToPlayer(\\\"" + KuId + "\\\"):PushEvent('death')"
+	masterCMD := "UserToPlayer(\"" + shellUtils.EscapeLuaStr(KuId) + "\"):PushEvent('death')"
 	clusterContainer.Send(clusterName, "Master", masterCMD)
 }
 
 func (c *WindowsGameConsoleService) RespawnPlayer(clusterName string, KuId string) {
 
-	masterCMD := "UserToPlayer(\\\"" + KuId + "\\\"):PushEvent('respawnfromghost')"
+	masterCMD := "UserToPlayer(\"" + shellUtils.EscapeLuaStr(KuId) + "\"):PushEvent('respawnfromghost')"
 	clusterContainer.Send(clusterName, "Master", masterCMD)
 }
 
@@ -87,25 +86,28 @@ func (c *WindowsGameConsoleService) CavesConsole(clusterName string, command str
 }
 
 func (c *WindowsGameConsoleService) OperatePlayer(clusterName string, otype, kuId string) {
+	safeKu := shellUtils.EscapeLuaStr(kuId)
 	command := ""
 	//复活
 	if otype == "0" {
-		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('respawnfromghost')", kuId) // B2
+		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('respawnfromghost')", safeKu) // B2/I1
 	}
 	//杀死
 	if otype == "1" {
-		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('death')", kuId) // B2
+		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('death')", safeKu) // B2/I1
 	}
 	//更换角色
 	if otype == "2" {
-		command = fmt.Sprintf("c_despawn('%s')", kuId) // B2
+		command = fmt.Sprintf("c_despawn('%s')", safeKu) // B2/I1
+	}
+	if command == "" {
+		return // M13: 非法 otype 不发空命令
 	}
 	c.MasterConsole(clusterName, command)
 	c.CavesConsole(clusterName, command)
 }
 
 func (c *WindowsGameConsoleService) ReadLevelServerLog(clusterName, levelName string, length uint) []string {
-	// levelServerIniPath := dstUtils2.GetLevelServerIniPath(clusterName, levelName)
 	serverLogPath := dstUtils.GetLevelServerLogPath(clusterName, levelName)
 	lines, err := fileUtils.ReverseRead(serverLogPath, length)
 	if err != nil {
@@ -115,7 +117,6 @@ func (c *WindowsGameConsoleService) ReadLevelServerLog(clusterName, levelName st
 }
 
 func (c *WindowsGameConsoleService) ReadLevelServerChatLog(clusterName, levelName string, length uint) []string {
-	// levelServerIniPath := dstUtils2.GetLevelServerIniPath(clusterName, levelName)
 	serverChatLogPath := dstUtils.GetLevelServerChatLogPath(clusterName, levelName)
 	lines, err := fileUtils.ReverseRead(serverChatLogPath, length)
 	if err != nil {

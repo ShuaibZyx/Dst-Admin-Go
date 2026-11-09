@@ -214,6 +214,23 @@ func (s *ShareApi) ImportClusterConfig(ctx *gin.Context) {
 }
 
 
+// DirectConnectConfig 直连配置写入口（I5）
+func (s *ShareApi) DirectConnectConfig(ctx *gin.Context) {
+	var body struct {
+		IPMode       string `json:"ip_mode"`
+		ExternalIP   string `json:"external_ip"`
+		ExternalPort string `json:"external_port"`
+	}
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+	saveKV("ip_mode", body.IPMode)
+	saveKV("external_ip", body.ExternalIP)
+	saveKV("external_port", body.ExternalPort)
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: body})
+}
+
 // DirectConnect 直连代码（IP 三态 x 外部端口）
 // external_port（KV，可空）：NAT/FRP 映射端口，空则用世界 server_port
 func (s *ShareApi) DirectConnect(ctx *gin.Context) {

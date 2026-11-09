@@ -119,3 +119,13 @@ func Chmod(filePath string) error {
 func Quote(arg string) string {
 	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
 }
+
+// EscapeLuaStr 游戏控制台 Lua 字符串转义（I1：防消息/kuId 注入第二条命令）
+func EscapeLuaStr(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
+}

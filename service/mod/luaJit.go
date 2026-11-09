@@ -11,7 +11,7 @@ import (
 const LuaJitModId = "workshop-3444078585"
 
 var (
-	reLuaJitEnabled = regexp.MustCompile(`(?s)(\["` + regexp.QuoteMeta(LuaJitModId) + `"\]\s*=\s*\{[^}]*?enabled\s*=\s*)(true|false)`)
+	reLuaJitEnabled = regexp.MustCompile(`(?s)(\["` + regexp.QuoteMeta(LuaJitModId) + `"\].{0,1000}?enabled\s*=\s*)(true|false)`) // M1: 跨嵌套块
 	reLuaJitBlock   = regexp.MustCompile(`\["` + regexp.QuoteMeta(LuaJitModId) + `"\]\s*=\s*\{[^}]*?\}`)
 )
 

@@ -36,7 +36,7 @@ func (d *DstConfigApi) SaveDstConfig(ctx *gin.Context) {
 	}
 	dstConfigUtils.SaveDstConfig(dstConfig)
 	global.Collect.ReCollect(filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster), dstConfig.Cluster)
-	initEvnService.InitBaseLevel(dstConfig, "默认初始化的世界", "pds-g^KU_qE7e8rv1^VVrVXd/01kBDicd7UO5LeL+uYZH1+geZlrutzItvOaw=", true)
+	initEvnService.InitBaseLevel(dstConfig, "默认初始化的世界", "", true)
 
 	autoCheck.Manager.ReStart(dstConfig.Cluster)
 

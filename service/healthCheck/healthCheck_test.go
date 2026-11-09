@@ -100,3 +100,13 @@ func TestRunWarnsOnBadModoverrides(t *testing.T) {
 		t.Fatalf("modoverrides 语法错应为 error，实际 %s", it.Status)
 	}
 }
+
+// I4: 面板默认结构互通配置在 cluster.ini，不应对 server.ini 无 master_ip 误报
+func TestRunShardLinkOkWithClusterIni(t *testing.T) {
+	base := writeCluster(t, "10999", "10998", true)
+	items := Run(base)
+	it := find(items, ItemShardLink)
+	if it == nil || it.Status == StatusError {
+		t.Fatalf("默认结构不应报 shard_link error，实际 %+v", it)
+	}
+}

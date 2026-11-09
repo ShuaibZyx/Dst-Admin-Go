@@ -1,6 +1,7 @@
 package api
 
 import (
+	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/levelConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/service/healthCheck"
@@ -214,6 +215,10 @@ func copyFile(src, dst string) error {
 // Start 启动世界
 func (g *GameLevel2Api) Start(ctx *gin.Context) {
 	levelName := ctx.Query("levelName")
+	if !fileUtils.ValidName(levelName) { // I1
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal levelName"})
+		return
+	}
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	bin := cluster.Bin
 	beta := cluster.Beta
@@ -251,6 +256,10 @@ func (g *GameLevel2Api) Stop(ctx *gin.Context) {
 // Start 启动世界
 func (g *GameLevel2Api) StartAll(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
+	startBefore(ctx) // I8: 一键启动同走体检闸门与 LuaJIT 应用
+	if ctx.IsAborted() {
+		return
+	}
 	clusterName := cluster.ClusterName
 
 	gameService.StartGame(clusterName)

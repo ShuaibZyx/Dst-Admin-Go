@@ -102,13 +102,13 @@ func (b *BackupService) DeleteBackup(ctx *gin.Context, fileNames []string) {
 
 }
 
-func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) {
+func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) error {
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	filePath, err := fileUtils.SafeJoin(cluster.Backup, backupName)
 	if err != nil {
 		log.Println("非法备份名", err)
-		return
+		return err
 	}
 	clusterPath := filepath.Join(dstUtils.GetClusterBasePath(cluster.ClusterName))
 	log.Println("正在恢复存档", filePath, clusterPath)
@@ -118,23 +118,29 @@ func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) {
 	if err := zip.Unzip3(filePath, tmpPath); err != nil {
 		log.Println("解压失败，原存档保持不变:", err)
 		_ = fileUtils.DeleteDir(tmpPath)
-		return
+		return err
 	}
-	if err := fileUtils.DeleteDir(clusterPath); err != nil {
-		log.Println("删除旧存档失败:", err)
+	// I3: 原子交换：旧档先改名，替换失败可回滚，成功后删旧档
+	oldPath := clusterPath + ".restore_old"
+	_ = fileUtils.DeleteDir(oldPath)
+	if err := fileUtils.Rename(clusterPath, oldPath); err != nil {
+		log.Println("旧存档改名失败:", err)
 		_ = fileUtils.DeleteDir(tmpPath)
-		return
+		return err
 	}
 	if err := fileUtils.Rename(tmpPath, clusterPath); err != nil {
-		log.Println("替换存档目录失败:", err)
+		log.Println("替换存档目录失败，回滚:", err)
+		_ = fileUtils.Rename(oldPath, clusterPath)
+		return err
 	}
+	_ = fileUtils.DeleteDir(oldPath)
 	// 安装mod
 	modoverride, err := fileUtils.ReadFile(dstUtils.GetMasterModoverridesPath(cluster.ClusterName))
 	if err != nil {
 		log.Println("读取模组失败", err)
 	}
 	dstUtils.DedicatedServerModsSetup(cluster.ClusterName, modoverride)
-
+	return nil
 }
 
 func (b *BackupService) CreateBackup(clusterName, backupName string) {
@@ -142,7 +148,7 @@ func (b *BackupService) CreateBackup(clusterName, backupName string) {
 	cluster := clusterUtils.GetCluster(clusterName)
 	backupPath := cluster.Backup
 
-	b.console.CSave(cluster.ClusterName, "Master")
+	saveAllLevels(&b.console, cluster.ClusterName) // M9
 
 	src := dstUtils.GetClusterBasePath(clusterName)
 	if !fileUtils.Exists(backupPath) {
@@ -234,7 +240,7 @@ func (b *BackupService) ScheduleBackupSnapshots() {
 			if cluster.ClusterName != "" {
 				snapshotPrefix := "(snapshot)"
 				if snapshot.IsCSave == 1 {
-					b.console.CSave(cluster.ClusterName, "Master")
+					saveAllLevels(&b.console, cluster.ClusterName) // M9
 				}
 				b.CreateSnapshotBackup(snapshotPrefix, cluster.ClusterName)
 				// 删除快照
@@ -350,4 +356,17 @@ func (b *BackupService) GenBackUpSnapshotName(prefix, clusterName string) string
 	backupName := b.GenGameBackUpName(clusterName)
 	backupName = prefix + backupName
 	return backupName
+}
+
+
+// M9: 备份前对所有世界发 c_save
+func saveAllLevels(console *GameConsoleService, clusterName string) {
+	basePath := dstUtils.GetClusterBasePath(clusterName)
+	if entries, err := os.ReadDir(basePath); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				console.CSave(clusterName, e.Name())
+			}
+		}
+	}
 }

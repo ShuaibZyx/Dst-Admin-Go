@@ -54,6 +54,7 @@ func initLevel2(router *gin.RouterGroup) {
 	group4 := router.Group("/api/share")
 	{
 		group4.GET("/direct-connect", shareApi.DirectConnect)
+		group4.POST("/direct-connect/config", shareApi.DirectConnectConfig)
 		group4.GET("/keyCer", shareApi.GetKeyCerApi)
 		group4.GET("/keyCer/reflush", shareApi.ReflushKeyCerApi)
 		group4.GET("/keyCer/enable", shareApi.EnableKeyCerApi)
