@@ -1,6 +1,7 @@
 package api
 
 import (
+	"dst-admin-go/utils/levelConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/service/healthCheck"
 	"dst-admin-go/constant/consts"
@@ -579,7 +580,7 @@ func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
 	}
 	if mode == "standalone" {
 		for _, l := range gameLevel2Service.GetLevelList(clusterName) {
-			_ = gameLevel2Service.DeleteLevel(clusterName, l.File)
+			_ = gameLevel2Service.DeleteLevel(clusterName, l.LevelName)
 		}
 	}
 	for i := range worlds {
