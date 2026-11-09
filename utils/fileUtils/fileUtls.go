@@ -15,10 +15,7 @@ import (
 
 func Exists(path string) bool {
 	_, err := os.Stat(path)
-	if err != nil {
-		return os.IsExist(err)
-	}
-	return true
+	return err == nil // C1: 权限错误等不应被当作“不存在”导致误创建/截断
 }
 
 func IsDir(path string) bool {
@@ -154,6 +151,9 @@ func ReverseRead(filename string, lineNum uint) ([]string, error) {
 	defer file.Close()
 	//获取文件大小
 	fs, err := file.Stat()
+	if err != nil {
+		return nil, err // C2: Stat 失败不得继续
+	}
 	fileSize := fs.Size()
 
 	var offset int64 = -1   //偏移量，初始化为-1，若为0则会读到EOF
@@ -374,4 +374,32 @@ func copyHelper(srcPath, outFileDir string) error {
 		return err
 	}
 	return nil
+}
+
+// SafeJoin 将用户提供的单段名称拼到 base 下，拒绝任何穿越/分隔符/绝对路径（A6/A9）
+func SafeJoin(base, name string) (string, error) {
+	if name == "" || name == "." || name == ".." {
+		return "", fmt.Errorf("invalid name %q", name)
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return "", fmt.Errorf("invalid name %q", name)
+	}
+	if filepath.IsAbs(name) || strings.Contains(name, ":") {
+		return "", fmt.Errorf("invalid name %q", name)
+	}
+	return filepath.Join(base, name), nil
+}
+
+// ValidName 白名单校验：仅 [A-Za-z0-9_-]（A3/A9：level/cluster 名等用户输入）
+func ValidName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-'
+		if !ok {
+			return false
+		}
+	}
+	return true
 }

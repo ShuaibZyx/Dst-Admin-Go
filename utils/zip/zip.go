@@ -1,6 +1,7 @@
 package zip
 
 import (
+	"fmt"
 	"archive/zip"
 	"errors"
 	"io"
@@ -79,6 +80,9 @@ func Unzip(zipFile, destDir string) error {
 
 	for _, file := range reader.File {
 		path := filepath.Join(destDir, file.Name)
+		if rel, relErr := filepath.Rel(destDir, path); relErr != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("zip-slip blocked: %s", file.Name)
+		}
 
 		if file.FileInfo().IsDir() {
 			err = os.MkdirAll(path, os.ModePerm)
@@ -144,6 +148,9 @@ func Unzip3(source, destination string) error {
 		relativePath = strings.TrimPrefix(relativePath, "\\")
 
 		extractedFilePath := filepath.Join(destination, relativePath)
+		if rel, relErr := filepath.Rel(destination, extractedFilePath); relErr != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("zip-slip blocked: %s", file.Name)
+		}
 		log.Println("extractedFilePath", extractedFilePath)
 		if file.FileInfo().IsDir() {
 			os.MkdirAll(extractedFilePath, os.ModePerm)

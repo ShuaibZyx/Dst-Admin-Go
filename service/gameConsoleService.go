@@ -163,7 +163,7 @@ func (c *GameConsoleService) CavesConsole(clusterName string, command string) {
 		WindowGameConsoleService.CavesConsole(clusterName, command)
 		return
 	}
-	cmd := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"" + command + "\\n\""
+	cmd := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"" + command + "\\n\""
 	shellUtils.Shell(cmd)
 }
 

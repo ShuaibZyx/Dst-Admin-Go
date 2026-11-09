@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/vo"
@@ -30,7 +31,15 @@ func (d *FileApi) UploadUgcMods(ctx *gin.Context) {
 	}
 
 	log.Println("上传ugc模组路径 ", ugcModPath)
+	if len(files) != len(filePaths) {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "files/filePaths length mismatch", Data: nil})
+		return
+	}
 	for i, file := range files {
+		if strings.Contains(filePaths[i], "..") || strings.Contains(file.Filename, "..") || strings.ContainsAny(file.Filename, "/\\") {
+			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal path", Data: nil})
+			return
+		}
 		dir := filepath.Join(ugcModPath, filepath.Dir(filePaths[i]))
 		fileUtils.CreateDirIfNotExists(dir)
 		p := filepath.Join(ugcModPath, filepath.Dir(filePaths[i]), file.Filename)

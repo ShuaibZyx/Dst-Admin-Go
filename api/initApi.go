@@ -51,7 +51,7 @@ func (f *InitApi) CheckIsFirst(ctx *gin.Context) {
 	} else {
 		dstConfig := dstConfigUtils.GetDstConfig()
 		if dstConfig.Cluster != "" {
-			initEvnService.InitBaseLevel(&dstConfig, "默认初始", "pds-g^KU_qE7e8rv1^VVrVXd/01kBDicd7UO5LeL+uYZH1+geZlrutzItvOaw=", true)
+			initEvnService.InitBaseLevel(&dstConfig, "默认初始", "", true) // A5: 不预置 token，由用户填写
 		}
 
 	}

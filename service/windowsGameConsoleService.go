@@ -1,10 +1,8 @@
 package service
 
 import (
-	"dst-admin-go/constant/screenKey"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
-	"dst-admin-go/utils/shellUtils"
 	"fmt"
 	"log"
 	"path"
@@ -34,8 +32,6 @@ func (c *WindowsGameConsoleService) SentBroadcast(clusterName string, message st
 		broadcast += message
 		broadcast += "\\\")"
 		log.Println(broadcast)
-		shellUtils.Shell(broadcast)
-
 		clusterContainer.Send(clusterName, "Master", broadcast)
 	}
 
@@ -83,15 +79,11 @@ func (c *WindowsGameConsoleService) Regenerateworld(clusterName string) {
 }
 
 func (c *WindowsGameConsoleService) MasterConsole(clusterName string, command string) {
-
-	cmd := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"" + command + "\\n\""
-	shellUtils.Shell(cmd)
+	clusterContainer.Send(clusterName, "Master", command) // B11: Windows 走 stdin，不经 shell/screen
 }
 
 func (c *WindowsGameConsoleService) CavesConsole(clusterName string, command string) {
-
-	cmd := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"" + command + "\\n\""
-	shellUtils.Shell(cmd)
+	clusterContainer.Send(clusterName, "Caves", command) // B11/B1: 洞穴走 Caves
 }
 
 func (c *WindowsGameConsoleService) OperatePlayer(clusterName string, otype, kuId string) {
@@ -137,11 +129,8 @@ func (c *WindowsGameConsoleService) SendCommand(clusterName string, levelName st
 }
 
 func (c *WindowsGameConsoleService) CSave(clusterName string, levelName string) {
-	log.Println("正在 s_save() 存档", clusterName, levelName)
-	command := "c_save()"
-	cmd := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"" + command + "\\n\""
-	shellUtils.Shell(cmd)
-
+	log.Println("正在 c_save() 存档", clusterName, levelName)
+	clusterContainer.Send(clusterName, levelName, "c_save()") // B11: Windows 走 stdin
 	time.Sleep(5 * time.Second)
 }
 

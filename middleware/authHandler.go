@@ -11,7 +11,7 @@ import (
 
 var loginService = service.LoginService{}
 var (
-	whitelist = []string{"/api/login", "/api/logout", "/ws", "/api/bootstrap", "/api/init", "/api/install/steamcmd"}
+	whitelist = []string{"/api/login", "/api/logout", "/api/bootstrap", "/api/init", "/api/install/steamcmd"} // A4: /ws 需鉴权
 )
 
 func apiFilter(s []string, str string) bool {

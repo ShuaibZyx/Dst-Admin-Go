@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/levelConfigUtils"
@@ -159,6 +161,9 @@ func (g *GameLevel2Service) CreateLevel(clusterName string, level *level.World) 
 }
 
 func (g *GameLevel2Service) DeleteLevel(clusterName string, levelName string) error {
+	if !fileUtils.ValidName(levelName) {
+		return fmt.Errorf("invalid level name %q", levelName) // A9
+	}
 	gameServe.shutdownLevel(clusterName, levelName)
 	err := fileUtils.DeleteDir(filepath.Join(dstUtils.GetClusterBasePath(clusterName), levelName))
 	if err != nil {

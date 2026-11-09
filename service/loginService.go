@@ -161,6 +161,7 @@ func (l *LoginService) IsWhiteIP(ctx *gin.Context) bool {
 					//fmt.Println(len)
 					if err != nil {
 						fmt.Printf("Error parsing CIDR: %v\n", err)
+						continue // A10
 					}
 					if netadmin.Contains(ipnet) {
 						return true

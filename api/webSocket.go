@@ -1,6 +1,10 @@
 package api
 
 import (
+	"path/filepath"
+	"dst-admin-go/service"
+	"dst-admin-go/utils/dstUtils"
+	"github.com/gin-contrib/sessions"
 	"sync"
 	"dst-admin-go/utils/fileUtils"
 	"fmt"
@@ -44,6 +48,15 @@ var (
 )
 
 func (ws *WebSocketApi) HandlerWS(ctx *gin.Context) {
+	// A4: /ws 与其它接口同级鉴权
+	session := sessions.Default(ctx)
+	if session.Get("username") == nil {
+		loginSvc := service.LoginService{}
+		if !loginSvc.IsWhiteIP(ctx) {
+			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+	}
 	w := ctx.Writer
 	r := ctx.Request
 	wsTail(w, r)
@@ -118,6 +131,12 @@ func wsReader(ws *websocket.Conn, done *int32) {
 				continue
 			}
 			filename := strings.TrimSpace(split[1])
+			cleanName := filepath.Clean(filename)
+			kleiRoot := filepath.Clean(dstUtils.GetKleiDstPath())
+			if !strings.HasPrefix(cleanName, kleiRoot) {
+				log.Println("tailf blocked outside klei dir:", filename)
+				continue // A4: 仅允许存档目录内文件
+			}
 			log.Printf("tailf " + filename)
 
 			//返回前100条数据

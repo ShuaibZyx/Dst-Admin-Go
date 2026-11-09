@@ -66,7 +66,15 @@ func (b *BackupService) GetBackupList(clusterName string) []vo.BackupVo {
 func (b *BackupService) RenameBackup(ctx *gin.Context, fileName, newName string) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	backupPath := cluster.Backup
-	err := fileUtils.Rename(filepath.Join(backupPath, fileName), filepath.Join(backupPath, newName))
+	p1, err := fileUtils.SafeJoin(backupPath, fileName)
+	if err != nil {
+		return
+	}
+	p2, err := fileUtils.SafeJoin(backupPath, newName)
+	if err != nil {
+		return
+	}
+	err = fileUtils.Rename(p1, p2)
 	if err != nil {
 		return
 	}
@@ -77,11 +85,16 @@ func (b *BackupService) DeleteBackup(ctx *gin.Context, fileNames []string) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	backupPath := cluster.Backup
 	for _, fileName := range fileNames {
-		filePath := filepath.Join(backupPath, fileName)
+		filePath, err := fileUtils.SafeJoin(backupPath, fileName)
+	if err != nil {
+		log.Println("非法备份名", err)
+		continue
+	}
+	_ = err
 		if !fileUtils.Exists(filePath) {
 			continue
 		}
-		err := fileUtils.DeleteFile(filePath)
+		err = fileUtils.DeleteFile(filePath)
 		if err != nil {
 			return
 		}
@@ -92,18 +105,28 @@ func (b *BackupService) DeleteBackup(ctx *gin.Context, fileNames []string) {
 func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) {
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
-	filePath := filepath.Join(cluster.Backup, backupName)
-	clusterPath := filepath.Join(dstUtils.GetClusterBasePath(cluster.ClusterName))
-	err := fileUtils.DeleteDir(clusterPath)
+	filePath, err := fileUtils.SafeJoin(cluster.Backup, backupName)
 	if err != nil {
-		log.Panicln("删除失败,", clusterPath, err)
+		log.Println("非法备份名", err)
+		return
 	}
-	log.Println("正在恢复存档", filePath, filepath.Join(dstUtils.GetKleiDstPath()))
-
-	// err = zip.Unzip2(filePath, filepath.Join(constant.HOME_PATH, ".klei/DoNotStarveTogether"), cluster.ClusterName)
-	err = zip.Unzip3(filePath, clusterPath)
-	if err != nil {
-		log.Panicln("解压失败,", filePath, clusterPath, err)
+	clusterPath := filepath.Join(dstUtils.GetClusterBasePath(cluster.ClusterName))
+	log.Println("正在恢复存档", filePath, clusterPath)
+	// A6: 先解压到临时目录，成功后再替换，避免恢复失败导致存档丢失
+	tmpPath := clusterPath + ".restore_tmp"
+	_ = fileUtils.DeleteDir(tmpPath)
+	if err := zip.Unzip3(filePath, tmpPath); err != nil {
+		log.Println("解压失败，原存档保持不变:", err)
+		_ = fileUtils.DeleteDir(tmpPath)
+		return
+	}
+	if err := fileUtils.DeleteDir(clusterPath); err != nil {
+		log.Println("删除旧存档失败:", err)
+		_ = fileUtils.DeleteDir(tmpPath)
+		return
+	}
+	if err := fileUtils.Rename(tmpPath, clusterPath); err != nil {
+		log.Println("替换存档目录失败:", err)
 	}
 	// 安装mod
 	modoverride, err := fileUtils.ReadFile(dstUtils.GetMasterModoverridesPath(cluster.ClusterName))
@@ -143,9 +166,12 @@ func (b *BackupService) DownloadBackup(c *gin.Context) {
 	clusterName := c.GetHeader("level")
 	cluster := clusterUtils.GetCluster(clusterName)
 
-	filePath := filepath.Join(cluster.Backup, fileName)
+	filePath, err := fileUtils.SafeJoin(cluster.Backup, fileName)
+	if err != nil {
+		return
+	}
 	//打开文件
-	_, err := os.Open(filePath)
+	_, err = os.Open(filePath)
 	//非空处理
 	if err != nil {
 		log.Panicln("download filePath error", err)
@@ -159,18 +185,27 @@ func (b *BackupService) DownloadBackup(c *gin.Context) {
 
 func (b *BackupService) UploadBackup(c *gin.Context) {
 	// 单文件
-	file, _ := c.FormFile("file")
+	file, ferr := c.FormFile("file")
+	if ferr != nil || file == nil {
+		return
+	}
 	log.Println(file.Filename)
 
 	cluster := clusterUtils.GetClusterFromGin(c)
-	dst := filepath.Join(cluster.Backup, file.Filename)
+	if file == nil {
+		return
+	}
+	dst, err := fileUtils.SafeJoin(cluster.Backup, file.Filename)
+	if err != nil {
+		return
+	}
 
 	if fileUtils.Exists(dst) {
 		log.Panicln("backup is existed")
 	}
 
 	// 上传文件至指定的完整文件路径
-	err := c.SaveUploadedFile(file, dst)
+	err = c.SaveUploadedFile(file, dst)
 	if err != nil {
 		return
 	}

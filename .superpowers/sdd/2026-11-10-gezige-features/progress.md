@@ -9,3 +9,8 @@ Pre-flight 共享接口：
 - Task 3 修 Send 转义 → Task 4/5/7 指令发送共用 — 一致，无冲突
 
 Ruling: TDD 范围 — 纯逻辑（白名单/SafeJoin/解析/Exists/断言安全函数）严格 RED→GREEN；进程时序与并发（A1/A2/B15/B16/B14）用并发压力测试与状态断言验证（-race），不模拟真实游戏进程 — cost if wrong: 进程交互边角依赖最终 review 兜底。
+Task 1: complete (commits 977af9f..9966c8d, tests: go test ./... → ok)
+Task 1: Ruling: B18 不成立 — robfig/cron v3 New() 默认含 Recover — 危险降级为“定时任务半成品状态”deferred minor — cost if wrong: 极端 cron 版本行为差异再兜一层
+Task 1: Ruling: B9.4 采用 uuid|checkType 复合键 + Delete 按 uuid/level_name 多键删 — 根因是三处键语义混用 — cost if wrong: 遗留任务删除遗漏
+Task 1: Ruling: A2 测试模拟写者需与产品写者同锁 — 测试裸写 map 曾复现假阳性 — cost if wrong: 无
+Task 1: minor (deferred): 定时任务中途 panic 留下“已停服未启动”半成品状态

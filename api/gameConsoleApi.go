@@ -216,6 +216,9 @@ func (g *GameConsoleApi) CleanLevel(ctx *gin.Context) {
 	levels := ctx.QueryArray("level")
 
 	for _, level := range levels {
+		if !fileUtils.ValidName(level) {
+			continue // A9: 非法 level 名跳过，防止穿越删除
+		}
 		fileUtils.DeleteDir(path.Join(basePath, level, "backup"))
 		fileUtils.DeleteDir(path.Join(basePath, level, "save"))
 		fileUtils.DeleteDir(path.Join(basePath, level, "server_chat_log.txt"))

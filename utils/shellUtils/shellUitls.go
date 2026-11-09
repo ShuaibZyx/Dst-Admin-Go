@@ -1,6 +1,7 @@
 package shellUtils
 
 import (
+	"strings"
 	"bytes"
 	"fmt"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -111,4 +112,10 @@ func Chmod(filePath string) error {
 	}
 
 	return nil
+}
+
+
+// Quote 将参数安全引用为 POSIX sh 单引号字面量（A3）
+func Quote(arg string) string {
+	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
 }
