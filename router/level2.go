@@ -14,6 +14,7 @@ func initLevel2(router *gin.RouterGroup) {
 		group.PUT("", gameLevelApi.SaveLevelsList)
 		group.POST("", gameLevelApi.CreateNewLevel)
 		group.DELETE("", gameLevelApi.DeleteLevel)
+		group.POST("/preset/ia", gameLevelApi.CreateIAPreset)
 	}
 
 	group2 := router.Group("/api/game/8level")

@@ -564,3 +564,30 @@ func findFreeUDPPorts(startPort, endPort int) ([]int, error) {
 
 	return freePorts, nil
 }
+
+
+// CreateIAPreset 岛屿冒险(Island Adventures)世界预设
+// mode=overlay: 追加 Shipwrecked+Volcano；mode=standalone: 独立 IA 存档（Shipwrecked 主分片）
+func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
+	mode := ctx.Query("mode")
+	cluster := clusterUtils.GetClusterFromGin(ctx)
+	clusterName := cluster.ClusterName
+	worlds := levelConfigUtils.GenerateIAPreset(mode)
+	if worlds == nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "mode 必须是 overlay 或 standalone"})
+		return
+	}
+	if mode == "standalone" {
+		for _, l := range gameLevel2Service.GetLevelList(clusterName) {
+			_ = gameLevel2Service.DeleteLevel(clusterName, l.File)
+		}
+	}
+	for i := range worlds {
+		if err := gameLevel2Service.CreateLevel(clusterName, &worlds[i]); err != nil {
+			log.Println("创建 IA 世界失败", err)
+			ctx.JSON(http.StatusInternalServerError, vo.Response{Code: 500, Msg: err.Error()})
+			return
+		}
+	}
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: worlds})
+}
