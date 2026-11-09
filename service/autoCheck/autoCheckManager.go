@@ -42,10 +42,12 @@ var gameService service.GameService
 var logRecordService service.LogRecordService
 
 func (m *AutoCheckManager) ReStart(clusterName string) {
+	m.mutex.Lock()
 	for s := range m.statusMap {
 		close(m.statusMap[s])  // 关闭通道
 		delete(m.statusMap, s) // 从 statusMap 中删除键值对
 	}
+	m.mutex.Unlock()
 
 	// 清空所有表
 	db := database.DB
@@ -127,8 +129,8 @@ func (m *AutoCheckManager) StartGameUpdate() {
 		autoCheck.CheckType = consts.UPDATE_GAME
 	}
 	log.Println("StartGameUpdate", autoCheck)
-	taskId := autoCheck.Uuid
-	m.run(&autoCheck, m.statusMap[taskId])
+	taskId := autoCheck.Uuid + "|" + autoCheck.CheckType // B9: 复合键
+	m.run(&autoCheck, m.stopChan(taskId))
 }
 
 func (m *AutoCheckManager) StartGameLevelDown() {
@@ -142,12 +144,13 @@ func (m *AutoCheckManager) StartGameLevelDown() {
 		if autoCheck.ID == 0 {
 			autoCheck.ClusterName = dstConfig.Cluster
 			autoCheck.Uuid = uuid
+			autoCheck.LevelName = config.LevelList[i].File
 			autoCheck.Enable = 0
 			autoCheck.Interval = 30
 			autoCheck.CheckType = consts.LEVEL_DOWN
 		}
 		log.Println("StartGameLevelDown", autoCheck)
-		taskId := autoCheck.Uuid
+		taskId := autoCheck.Uuid + "|" + autoCheck.CheckType // B9: 复合键
 		//因为sleep机制 永远不会返回 所以改协程执行
 		go func() {
 			defer func() {
@@ -155,7 +158,7 @@ func (m *AutoCheckManager) StartGameLevelDown() {
 					log.Println(r)
 				}
 			}()
-			m.run(&autoCheck, m.statusMap[taskId])
+			m.run(&autoCheck, m.stopChan(taskId))
 			log.Println("StartGameLevelDownOver", autoCheck)
 		}()
 	}
@@ -178,14 +181,14 @@ func (m *AutoCheckManager) StartGameModDown() {
 			autoCheck.CheckType = consts.LEVEL_MOD
 		}
 		log.Println("StartGameModDown", autoCheck)
-		taskId := autoCheck.Uuid
+		taskId := autoCheck.Uuid + "|" + autoCheck.CheckType // B9: 复合键
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Println(r)
 				}
 			}()
-			m.run(&autoCheck, m.statusMap[taskId])
+			m.run(&autoCheck, m.stopChan(taskId))
 			log.Println("StartGameModDownOver", autoCheck)
 		}()
 	}
@@ -240,6 +243,18 @@ func (m *AutoCheckManager) check(task *model.AutoCheck) {
 	}
 }
 
+// stopChan 返回任务的停止通道，不存在则创建（B9: Start* 系列此前拿到恒 nil 的 channel，run 无法停止）
+func (m *AutoCheckManager) stopChan(taskId string) chan int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	ch, ok := m.statusMap[taskId]
+	if !ok {
+		ch = make(chan int)
+		m.statusMap[taskId] = ch
+	}
+	return ch
+}
+
 func (m *AutoCheckManager) AddAutoCheckTasks(task model.AutoCheck) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -247,7 +262,7 @@ func (m *AutoCheckManager) AddAutoCheckTasks(task model.AutoCheck) {
 	db := database.DB
 	db.Save(&task)
 
-	taskId := task.Uuid
+	taskId := task.Uuid + "|" + task.CheckType // B9: uuid+checkType 复合键，避免多任务互踩 channel
 	if oldChan, ok := m.statusMap[taskId]; ok {
 		close(oldChan) // 关闭旧的通道
 	}
@@ -270,11 +285,13 @@ func (m *AutoCheckManager) DeleteAutoCheck(taskId string) {
 
 	var autoCheck model.AutoCheck
 	db := database.DB
-	db.Delete(&autoCheck).Where("uuid = ?", taskId)
+	db.Where("uuid = ? OR level_name = ?", taskId, taskId).Delete(&autoCheck) // B9: Where 在 Delete 前；兼容 uuid/level_name 两种调用
 
-	if ch, ok := m.statusMap[taskId]; ok {
-		close(ch)                   // 关闭通道
-		delete(m.statusMap, taskId) // 从 statusMap 中删除键值对
+	for key, ch := range m.statusMap {
+		if key == taskId || strings.HasPrefix(key, taskId+"|") {
+			close(ch)
+			delete(m.statusMap, key)
+		}
 	}
 
 }
@@ -423,11 +440,13 @@ func SendAnnouncement2(clusterName string, levelName string, checkType string) {
 
 }
 
-func diffFetchModInfo2(activeModMap map[string]dstUtils.WorkshopItem) bool {
+func diffFetchModInfo2(activeModMap map[string]dstUtils.WorkshopItem) (noUpdate bool) {
 
+	noUpdate = true
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
+			noUpdate = true // B8: 异常视为"无更新"，避免 Steam API 抖动导致世界被无端重启
 		}
 	}()
 
@@ -468,17 +487,23 @@ func diffFetchModInfo2(activeModMap map[string]dstUtils.WorkshopItem) bool {
 		return true
 	}
 
-	dataList, ok := result["response"].(map[string]interface{})["publishedfiledetails"].([]interface{})
+	respObj, ok := result["response"].(map[string]interface{})
+	if !ok {
+		return true
+	}
+	dataList, ok := respObj["publishedfiledetails"].([]interface{})
 	if !ok {
 		return true
 	}
 	for i := range dataList {
 
-		data2 := dataList[i].(map[string]interface{})
-		_, find := data2["time_updated"]
-		if find {
-			timeUpdated := data2["time_updated"].(float64)
-			modId := data2["publishedfileid"].(string)
+		data2, ok := dataList[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		timeUpdated, find := data2["time_updated"].(float64)
+		modId, ok2 := data2["publishedfileid"].(string)
+		if find && ok2 {
 			value, ok := activeModMap[modId]
 			if ok {
 				if timeUpdated > float64(value.TimeUpdated) {

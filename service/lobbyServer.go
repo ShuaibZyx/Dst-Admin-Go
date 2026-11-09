@@ -131,7 +131,7 @@ type LobbyHome struct {
 }
 
 type LobbyHomeListBody struct {
-	GET []LobbyHome "GET"
+	GET []LobbyHome `json:"GET"`
 }
 
 type SecondaryInfo struct {

@@ -3,7 +3,6 @@ package service
 import (
 	"bufio"
 	"fmt"
-	"github.com/shirou/gopsutil/process"
 	"io"
 	"log"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shirou/gopsutil/process"
 )
 
 type ClusterContainer struct {
@@ -26,83 +27,87 @@ func NewClusterContainer() *ClusterContainer {
 	}
 }
 
-func (receiver *ClusterContainer) StartLevel(cluster, levelName string, bin int, steamcmd, dstServerInstall, ugcDirectory, persistent_storage_root, conf_dir string) {
-	//receiver.lock.Lock()
-	//defer receiver.lock.Unlock()
+func levelKey(cluster, levelName string) string {
+	return cluster + "_" + levelName
+}
 
-	key := cluster + "_" + levelName
+func (receiver *ClusterContainer) StartLevel(cluster, levelName string, bin int, steamcmd, dstServerInstall, ugcDirectory, persistent_storage_root, conf_dir string) {
+	key := levelKey(cluster, levelName)
 	log.Println("正在启动 ", key)
+
+	receiver.lock.Lock()
 	value, ok := receiver.container[key]
+	if ok && value.dstSeverInstall != dstServerInstall {
+		delete(receiver.container, key)
+		ok = false
+	}
 	if !ok {
 		value = NewLevelInstance(cluster, levelName, bin, steamcmd, dstServerInstall, ugcDirectory, persistent_storage_root, conf_dir)
 		receiver.container[key] = value
-	} else {
-		if value.dstSeverInstall != dstServerInstall {
-			receiver.Remove(cluster, levelName)
-			value = NewLevelInstance(cluster, levelName, bin, steamcmd, dstServerInstall, ugcDirectory, persistent_storage_root, conf_dir)
-			receiver.container[key] = value
-		}
 	}
+	receiver.lock.Unlock()
+
 	value.Start()
 }
 
 func (receiver *ClusterContainer) StopLevel(cluster, levelName string) {
-	key := cluster + "_" + levelName
-	value, ok := receiver.container[key]
 	log.Println("正在停止世界", cluster, levelName)
-	if ok {
+	if value := receiver.get(cluster, levelName); value != nil {
 		value.Stop()
 	}
 }
 
 func (receiver *ClusterContainer) Send(cluster, levelName, message string) {
-	key := cluster + "_" + levelName
-	value, ok := receiver.container[key]
-	if ok {
+	if value := receiver.get(cluster, levelName); value != nil {
 		value.Send(message)
 	}
 }
 
 func (receiver *ClusterContainer) Status(cluster, levelName string) bool {
-	key := cluster + "_" + levelName
-	value, ok := receiver.container[key]
-	if ok {
-		return value.Status()
-	}
-	return false
+	value := receiver.get(cluster, levelName)
+	return value != nil && value.Status()
 }
 
 func (receiver *ClusterContainer) MemUsage(cluster, levelName string) float64 {
-	key := cluster + "_" + levelName
-	value, ok := receiver.container[key]
-	if ok {
+	if value := receiver.get(cluster, levelName); value != nil {
 		return value.GetProcessMemInfo()
 	}
 	return 0
 }
 
 func (receiver *ClusterContainer) CpuUsage(cluster, levelName string) float64 {
-	key := cluster + "_" + levelName
-	value, ok := receiver.container[key]
-	if ok {
+	if value := receiver.get(cluster, levelName); value != nil {
 		return value.GetProcessCpuInfo()
 	}
 	return 0
 }
 
-func (receiver *ClusterContainer) Remove(cluster, levelName string) {
+// Kill 强杀游戏进程（B15：游戏卡死不响应 c_shutdown 时使用）
+func (receiver *ClusterContainer) Kill(cluster, levelName string) {
+	if value := receiver.get(cluster, levelName); value != nil {
+		value.Kill()
+	}
+}
+
+func (receiver *ClusterContainer) get(cluster, levelName string) *LevelInstance {
 	receiver.lock.RLock()
 	defer receiver.lock.RUnlock()
-	key := cluster + "_" + levelName
-	delete(receiver.container, key)
+	return receiver.container[levelKey(cluster, levelName)]
+}
+
+func (receiver *ClusterContainer) Remove(cluster, levelName string) {
+	receiver.lock.Lock()
+	defer receiver.lock.Unlock()
+	delete(receiver.container, levelKey(cluster, levelName))
 }
 
 type LevelInstance struct {
-	running atomic.Bool
-	lock    sync.Mutex
-	stdin   io.WriteCloser
-	stdout  io.ReadCloser
-	pid     int
+	running  atomic.Bool
+	lock     sync.Mutex // 保护状态迁移
+	sendLock sync.Mutex // 保护 stdin 写入（B13 并发写交错）
+	stdin    io.WriteCloser
+	stdout   io.ReadCloser
+	pid      int
 
 	cluster                 string
 	levelName               string
@@ -115,11 +120,7 @@ type LevelInstance struct {
 }
 
 func NewLevelInstance(cluster, levelName string, bin int, steamcmd, dstServerInstall, ugc_directory, persistent_storage_root, conf_dir string) *LevelInstance {
-	running := atomic.Bool{}
-	running.Store(false)
 	game := &LevelInstance{
-		lock:                    sync.Mutex{},
-		running:                 running,
 		cluster:                 cluster,
 		levelName:               levelName,
 		bin:                     bin,
@@ -129,6 +130,7 @@ func NewLevelInstance(cluster, levelName string, bin int, steamcmd, dstServerIns
 		persistent_storage_root: persistent_storage_root,
 		conf_dir:                conf_dir,
 	}
+	game.running.Store(false)
 	return game
 }
 
@@ -136,24 +138,26 @@ func (receiver *LevelInstance) Status() bool {
 	return receiver.running.Load()
 }
 
-func (receiver *LevelInstance) Start() {
-	if receiver.running.Load() == true {
-		return
-	}
+func (receiver *LevelInstance) setStopped() {
 	receiver.lock.Lock()
-	// 创建输出文件
+	defer receiver.lock.Unlock()
+	receiver.running.Store(false)
+}
+
+func (receiver *LevelInstance) Start() {
+	receiver.lock.Lock()
+	if receiver.running.Load() {
+		receiver.lock.Unlock()
+		return // A2: 加锁后双检，避免并发 Start 启动两个游戏进程
+	}
+
 	tLogsTxt := receiver.cluster + "_" + receiver.levelName + "_log"
 	logFile, err := os.Create(tLogsTxt)
 	if err != nil {
+		receiver.lock.Unlock() // A2: 创建失败必须解锁，否则永久死锁
 		log.Println("Error creating log file:", err)
 		return
 	}
-	defer func(logFile *os.File) {
-		err := logFile.Close()
-		if err != nil {
-			receiver.lock.Unlock()
-		}
-	}(logFile)
 
 	var args []string
 	if receiver.bin == 32 {
@@ -178,7 +182,6 @@ func (receiver *LevelInstance) Start() {
 		args = append(args, "-ugc_directory")
 		args = append(args, receiver.ugc_directory)
 	}
-	// 创建一个 cmd 对象
 	cmd := exec.Command(args[0], args[1:]...)
 	if receiver.bin == 32 {
 		cmd.Dir = receiver.dstSeverInstall + "\\bin"
@@ -188,69 +191,104 @@ func (receiver *LevelInstance) Start() {
 
 	receiver.running.Store(true)
 	receiver.lock.Unlock()
-	// 获取子进程的 stdin、stdout 和 stderr
-	receiver.stdin, err = cmd.StdinPipe()
+
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		log.Printf("Error getting stdin pipe: %v\n", err)
+		receiver.setStopped() // A2: 失败回退状态
+		_ = logFile.Close()
 		return
 	}
-	receiver.stdout, err = cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Printf("Error getting stdout pipe: %v\n", err)
+		receiver.setStopped()
+		_ = logFile.Close()
 		return
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		log.Printf("Error getting stderr pipe: %v\n", err)
+		receiver.setStopped()
+		_ = logFile.Close()
 		return
 	}
+	receiver.stdin = stdin
+	receiver.stdout = stdout
 
-	// 启动子进程
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Error starting command: %v\n", err)
+		receiver.setStopped()
+		_ = logFile.Close()
 		return
 	}
 
 	receiver.pid = cmd.Process.Pid
-	// 开启 goroutine 实时读取子进程的输出并写入文件和控制台
-	go func() {
-		io.Copy(io.MultiWriter(os.Stdout, logFile), receiver.stdout)
-	}()
-	go func() {
-		io.Copy(io.MultiWriter(os.Stderr, logFile), stderr)
-	}()
 
-	// 等待子进程退出
+	// B16: 先读完输出再 Wait/关文件，避免截断与关闭管道竞争
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(io.MultiWriter(os.Stdout, logFile), stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(io.MultiWriter(os.Stderr, logFile), stderr)
+	}()
+	wg.Wait()
+
 	if err := cmd.Wait(); err != nil {
 		log.Printf("Error waiting for command: %v\n", err)
-		if receiver.stdin != nil {
-			receiver.stdin.Close()
-		}
-		if receiver.stdout != nil {
-			receiver.stdout.Close()
-		}
-		receiver.running.Store(false)
 	}
+	receiver.setStopped()
+	_ = logFile.Close()
 	log.Println("process exit !!!")
-	receiver.running.Store(false)
 }
 
 func (receiver *LevelInstance) Stop() {
 	receiver.lock.Lock()
-	defer receiver.lock.Unlock()
+	running := receiver.running.Load()
+	stdin := receiver.stdin
+	receiver.lock.Unlock()
 
-	if receiver.running.Load() == true {
-		err := receiver.Send("c_shutdown(true)")
-		if err != nil {
-			log.Println("stop game error", err)
-		} else {
-			receiver.running.Store(false)
-		}
+	if !running {
+		return
+	}
+	if stdin == nil { // A2: 无 stdin 时不能 Send（nil 写入 panic）
+		receiver.Kill()
+		return
+	}
+	if err := receiver.Send("c_shutdown(true)"); err != nil {
+		log.Println("stop game error", err)
+	}
+	// B15: running 由 Start 的 Wait 统一置 false，此处不提前置位
+}
+
+// Kill 强杀子进程（B15）
+func (receiver *LevelInstance) Kill() {
+	receiver.lock.Lock()
+	pid := receiver.pid
+	receiver.lock.Unlock()
+	if pid <= 0 {
+		return
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		log.Println("kill: process not found", pid)
+		return
+	}
+	if err := p.Kill(); err != nil {
+		log.Println("kill error", err)
 	}
 }
 
 func (receiver *LevelInstance) Send(cmd string) error {
-	// 向子进程写入命令
+	receiver.sendLock.Lock()
+	defer receiver.sendLock.Unlock()
+	if receiver.stdin == nil {
+		return fmt.Errorf("stdin not ready")
+	}
 	writer := bufio.NewWriter(receiver.stdin)
 	log.Println("cmd: ", cmd)
 	cmd = strings.Replace(cmd, "\\", "", -1)
@@ -260,39 +298,44 @@ func (receiver *LevelInstance) Send(cmd string) error {
 		log.Printf("Error writing to stdin: %v\n", err)
 		return err
 	}
-	err = writer.Flush()
-	if err != nil {
-		return err
-	}
-	return nil
+	return writer.Flush()
 }
 
 func (receiver *LevelInstance) GetProcessMemInfo() float64 {
-	p, err := process.NewProcess(int32(receiver.pid))
+	receiver.lock.Lock()
+	pid := receiver.pid
+	receiver.lock.Unlock()
+	if pid <= 0 {
+		return 0
+	}
+	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		fmt.Println("Error getting process info:", err)
 		return 0
 	}
-	// 获取内存使用情况
 	memInfo, err := p.MemoryInfo()
 	if err != nil {
 		fmt.Println("Error getting memory info:", err)
 		return 0
 	}
-	memUsage := float64(memInfo.RSS) / (1024 * 1024) // 以 MB 为单位
-	return memUsage
+	return float64(memInfo.RSS) / (1024 * 1024)
 }
 
 func (receiver *LevelInstance) GetProcessCpuInfo() float64 {
-	p, err := process.NewProcess(int32(receiver.pid))
+	receiver.lock.Lock()
+	pid := receiver.pid
+	receiver.lock.Unlock()
+	if pid <= 0 {
+		return 0
+	}
+	p, err := process.NewProcess(int32(pid))
 	if err != nil {
 		fmt.Println("Error getting process info:", err)
 		return 0
 	}
-	// 获取 CPU 使用情况
 	cpuPercent, err := p.Percent(time.Second)
 	if err != nil {
-		fmt.Println("Error getting CPU percent:", err)
+		fmt.Println("Error getting cpu info:", err)
 		return 0
 	}
 	return cpuPercent

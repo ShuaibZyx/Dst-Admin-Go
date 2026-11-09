@@ -125,15 +125,15 @@ func initCollect() {
 
 	// autoCheck.AutoCheckObject = autoCheck.NewAutoCheckConfig(clusterName, dstConfig.Bin, dstConfig.Beta)
 
+	autoCheckManager := autoCheck.AutoCheckManager{}
+	autoCheck.Manager = &autoCheckManager // B9: 先赋值，避免早期 API 调用时 Manager 为 nil
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Println(r)
 			}
 		}()
-		autoCheckManager := autoCheck.AutoCheckManager{}
 		autoCheckManager.Start()
-		autoCheck.Manager = &autoCheckManager
 	}()
 }
 

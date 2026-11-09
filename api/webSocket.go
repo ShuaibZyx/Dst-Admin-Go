@@ -1,6 +1,7 @@
 package api
 
 import (
+	"sync"
 	"dst-admin-go/utils/fileUtils"
 	"fmt"
 	"log"
@@ -60,7 +61,17 @@ func wsTail(w http.ResponseWriter, r *http.Request) {
 	}
 	var done int32 = 0
 	go heartbeat(ws)
-	wsReader(ws, done)
+	wsReader(ws, &done)
+}
+
+// B14: websocket 单写者约束——所有写经互斥 helper
+var wsWriteMu sync.Mutex
+
+func wsWrite(ws *websocket.Conn, messageType int, data []byte) error {
+	wsWriteMu.Lock()
+	defer wsWriteMu.Unlock()
+	ws.SetWriteDeadline(time.Now().Add(writeWait))
+	return ws.WriteMessage(messageType, data)
 }
 
 func heartbeat(ws *websocket.Conn) {
@@ -76,8 +87,7 @@ func heartbeat(ws *websocket.Conn) {
 	for {
 		//从定时器中获取数据
 		<-pingTicker.C
-		ws.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+		if err := wsWrite(ws, websocket.PingMessage, []byte{}); err != nil {
 			log.Println(err)
 			return
 		}
@@ -85,7 +95,7 @@ func heartbeat(ws *websocket.Conn) {
 
 }
 
-func wsReader(ws *websocket.Conn, done int32) {
+func wsReader(ws *websocket.Conn, done *int32) {
 
 	defer ws.Close()
 	log.Println("ws close")
@@ -114,7 +124,7 @@ func wsReader(ws *websocket.Conn, done int32) {
 			content, err := fileUtils.ReverseRead(filename, 100)
 			if err == nil {
 				for _, line := range content {
-					if err := ws.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
+					if err := wsWrite(ws, websocket.TextMessage, []byte(line)); err != nil {
 						log.Println(err)
 						return
 					}
@@ -125,13 +135,13 @@ func wsReader(ws *websocket.Conn, done int32) {
 		}
 
 		if messageType == 1 && msg == "byte" {
-			atomic.AddInt32(&done, 1)
+			atomic.AddInt32(done, 1)
 			break
 		}
 	}
 }
 
-func tailf(ws *websocket.Conn, filename string, done int32) {
+func tailf(ws *websocket.Conn, filename string, done *int32) {
 	fileName := filename
 	config := tail.Config{
 		ReOpen:    true,                                 // 重新打开
@@ -156,13 +166,12 @@ func tailf(ws *websocket.Conn, filename string, done int32) {
 			time.Sleep(time.Second)
 			continue
 		}
-		ws.SetWriteDeadline(time.Now().Add(writeWait))
-		if err := ws.WriteMessage(websocket.TextMessage, []byte(line.Text)); err != nil {
+		if err := wsWrite(ws, websocket.TextMessage, []byte(line.Text)); err != nil {
 			log.Println(err)
 			return
 		}
 		// fmt.Println("line:", line.Text)
-		if atomic.CompareAndSwapInt32(&done, 1, 1) {
+		if atomic.CompareAndSwapInt32(done, 1, 1) {
 			break
 		}
 

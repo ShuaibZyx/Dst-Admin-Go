@@ -30,6 +30,7 @@ func (g *WindowsGameService) GetLastDstVersion() int64 {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
+		return 0
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -95,9 +96,8 @@ func (g *WindowsGameService) shutdownLevel(clusterName, level string) {
 	clusterContainer.StopLevel(clusterName, level)
 }
 
-// TODO 强制kill 掉进程
 func (g *WindowsGameService) killLevel(clusterName, level string) {
-
+	clusterContainer.Kill(clusterName, level)
 }
 
 func (g *WindowsGameService) LaunchLevel(clusterName, level string, bin, beta int) {

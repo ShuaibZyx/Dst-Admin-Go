@@ -37,30 +37,30 @@ func (d *GameArchive) GetGameArchive(clusterName string) *vo.GameArchive {
 
 	// 获取基础信息
 	go func() {
+		defer func() { wg.Done(); recover() }()
 		clusterIni := d.GetClusterIni(clusterName)
 		gameArchie.ClusterName = clusterIni.ClusterName
 		gameArchie.ClusterDescription = clusterIni.ClusterDescription
 		gameArchie.ClusterPassword = clusterIni.ClusterPassword
 		gameArchie.GameMod = clusterIni.GameMode
 		gameArchie.MaxPlayers = int(clusterIni.MaxPlayers)
-		wg.Done()
 	}()
 
 	// 获取mod数量
 	go func() {
+		defer func() { wg.Done(); recover() }()
 		masterModoverrides, err := fileUtils.ReadFile(path.Join(basePath, "Master", "modoverrides.lua"))
 		if err != nil {
 			gameArchie.Mods = 0
 		} else {
 			gameArchie.Mods = len(dstUtils.WorkshopIds(masterModoverrides))
 		}
-		wg.Done()
 	}()
 
 	// 获取天数和季节
 	go func() {
+		defer func() { wg.Done(); recover() }()
 		defer func() {
-			wg.Done()
 			if r := recover(); r != nil {
 			}
 		}()
@@ -69,8 +69,8 @@ func (d *GameArchive) GetGameArchive(clusterName string) *vo.GameArchive {
 
 	// 获取直连ip
 	go func() {
+		defer func() { wg.Done(); recover() }()
 		defer func() {
-			wg.Done()
 			if r := recover(); r != nil {
 
 			}
@@ -105,8 +105,8 @@ func (d *GameArchive) GetGameArchive(clusterName string) *vo.GameArchive {
 	}()
 
 	go func() {
+		defer func() { wg.Done(); recover() }()
 		defer func() {
-			wg.Done()
 			if r := recover(); r != nil {
 
 			}
