@@ -177,7 +177,7 @@ func (g *GameConsoleApi) CleanAllLevel(ctx *gin.Context) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Panicln("删除世界存档失败", r)
+			log.Println("删除世界存档失败", r) // C6: 不再重新抛出
 		}
 	}()
 
@@ -415,7 +415,7 @@ func (g *GameConsoleApi) DownloadDstLogFile(ctx *gin.Context) {
 		log.Panicln("fileName 不能为空")
 	}
 	levelName := ctx.Query("levelName")
-	if fileName == "" {
+	if levelName == "" { // B3
 		log.Panicln("levelName 不能为空")
 	}
 

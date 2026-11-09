@@ -18,7 +18,7 @@ type GameLevel2Service struct{}
 
 func (g *GameLevel2Service) GetLevelList(clusterName string) []level.World {
 	config, err := levelConfigUtils.GetLevelConfig(clusterName)
-	if err != err {
+	if err != nil { // B10
 		return []level.World{}
 	}
 	var levels []level.World

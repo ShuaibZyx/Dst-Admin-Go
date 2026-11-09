@@ -134,7 +134,7 @@ func (g *WindowsGameService) StopLevel(clusterName, level string) {
 	if g.GetLevelStatus(clusterName, level) {
 		var i uint8 = 1
 		for {
-			if g.GetLevelStatus(clusterName, level) {
+			if !g.GetLevelStatus(clusterName, level) { // B5: 世界已停止才结束重试
 				break
 			}
 			g.shutdownLevel(clusterName, level)

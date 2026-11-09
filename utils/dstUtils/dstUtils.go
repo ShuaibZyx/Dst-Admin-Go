@@ -129,7 +129,7 @@ func GetMasterServerIniPath(clusterName string) string {
 }
 
 func GetCavesServerIniPath(clusterName string) string {
-	return filepath.Join(GetKleiDstPath(), clusterName, "Master", "server.ini")
+	return filepath.Join(GetKleiDstPath(), clusterName, "Caves", "server.ini") // B4
 }
 
 func GetAdminlistPath(clusterName string) string {
@@ -171,7 +171,7 @@ func GetDstUpdateCmd(clusterName string) string {
 	// 根据操作系统生成不同的命令
 	var cmd string
 	if runtime.GOOS == "windows" {
-		cmd = fmt.Sprintf("cd /d %s && Start steamcmd.exe %s", steamCmdPath, baseCmd)
+		cmd = fmt.Sprintf("cd /d \"%s\" && Start \"\" steamcmd.exe %s", steamCmdPath, baseCmd)
 	} else {
 		steamCmdScript := filepath.Join(steamCmdPath, "steamcmd.sh")
 		if cluster.Bin == 86 {

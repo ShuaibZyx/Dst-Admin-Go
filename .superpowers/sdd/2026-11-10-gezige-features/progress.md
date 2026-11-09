@@ -14,3 +14,6 @@ Task 1: Ruling: B18 不成立 — robfig/cron v3 New() 默认含 Recover — 危
 Task 1: Ruling: B9.4 采用 uuid|checkType 复合键 + Delete 按 uuid/level_name 多键删 — 根因是三处键语义混用 — cost if wrong: 遗留任务删除遗漏
 Task 1: Ruling: A2 测试模拟写者需与产品写者同锁 — 测试裸写 map 曾复现假阳性 — cost if wrong: 无
 Task 1: minor (deferred): 定时任务中途 panic 留下“已停服未启动”半成品状态
+Task 2: complete (commits 9966c8d..a9467c1, tests: go test ./... → ok 2 pkgs)
+Task 2: Ruling: gameService 内部三函数 level 校验正则未匹配（签名差异）— 依赖 API 层 ValidName 入口防线 — cost if wrong: 内部调用路径漏防
+Task 2: minor (deferred): Steam API key 仍为常量（可配置化待后续）；A3 shell 参数 Quote 仅接线 helper 与部分入口

@@ -291,7 +291,8 @@ func (receiver *LevelInstance) Send(cmd string) error {
 	}
 	writer := bufio.NewWriter(receiver.stdin)
 	log.Println("cmd: ", cmd)
-	cmd = strings.Replace(cmd, "\\", "", -1)
+	// B13: 仅还原转义引号（\\\" -> \"），不再全局删除反斜杠（会破坏路径与转义）
+	cmd = strings.ReplaceAll(cmd, "\\\\\"", "\"")
 	input := cmd + "\n"
 	_, err := writer.WriteString(input)
 	if err != nil {

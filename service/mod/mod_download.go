@@ -86,7 +86,7 @@ func get_dst_ucgs_mods_installed_path(modid string) (string, bool) {
 		return masterModFilePath, true
 	}
 	if fileUtils.Exists(caveModFilePath) {
-		return masterModFilePath, true
+		return caveModFilePath, true // C3
 	}
 	return "", false
 }

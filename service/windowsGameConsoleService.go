@@ -90,15 +90,15 @@ func (c *WindowsGameConsoleService) OperatePlayer(clusterName string, otype, kuI
 	command := ""
 	//复活
 	if otype == "0" {
-		command = "UserToPlayer('%s'):PushEvent('respawnfromghost')"
+		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('respawnfromghost')", kuId) // B2
 	}
 	//杀死
 	if otype == "1" {
-		command = "UserToPlayer('%s'):PushEvent('death')"
+		command = fmt.Sprintf("UserToPlayer('%s'):PushEvent('death')", kuId) // B2
 	}
 	//更换角色
 	if otype == "2" {
-		command = "c_despawn('%s')"
+		command = fmt.Sprintf("c_despawn('%s')", kuId) // B2
 	}
 	c.MasterConsole(clusterName, command)
 	c.CavesConsole(clusterName, command)

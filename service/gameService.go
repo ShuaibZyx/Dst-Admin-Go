@@ -194,7 +194,7 @@ func (g *GameService) killLevel(clusterName, level string) {
 	if !g.GetLevelStatus(clusterName, level) {
 		return
 	}
-	cmd := " ps -ef | grep -v grep | grep -v tail |grep '" + clusterName + "'|grep " + level + " |sed -n '1P'|awk '{print $2}' |xargs kill -9"
+	cmd := " ps -ef | grep -v grep | grep -v tail | grep -v SCREEN |grep '" + clusterName + "'|grep " + level + " |sed -n '1P'|awk '{print $2}' |xargs kill -9" // B6
 	log.Println("正在kill世界", "cluster: ", clusterName, "level: ", level, "command: ", cmd)
 	_, err := shellUtils.Shell(cmd)
 	if err != nil {
@@ -290,7 +290,7 @@ func (g *GameService) StopLevelWithoutLog(clusterName, level string) {
 	if g.GetLevelStatus(clusterName, level) {
 		var i uint8 = 1
 		for {
-			if g.GetLevelStatus(clusterName, level) {
+			if !g.GetLevelStatus(clusterName, level) { // B5: 世界已停止才结束重试
 				break
 			}
 			g.shutdownLevel(clusterName, level)
