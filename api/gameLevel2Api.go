@@ -1,16 +1,16 @@
 package api
 
 import (
-	"dst-admin-go/utils/fileUtils"
-	"dst-admin-go/utils/levelConfigUtils"
-	"dst-admin-go/utils/dstUtils"
-	"dst-admin-go/service/healthCheck"
 	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
 	"dst-admin-go/service/autoCheck"
+	"dst-admin-go/service/healthCheck"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstConfigUtils"
+	"dst-admin-go/utils/dstUtils"
+	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/levelConfigUtils"
 	"dst-admin-go/utils/shellUtils"
 	"dst-admin-go/vo"
 	"dst-admin-go/vo/level"
@@ -575,7 +575,6 @@ func findFreeUDPPorts(startPort, endPort int) ([]int, error) {
 	return freePorts, nil
 }
 
-
 // CreateIAPreset 岛屿冒险(Island Adventures)世界预设
 // mode=overlay: 追加 Shipwrecked+Volcano；mode=standalone: 独立 IA 存档（Shipwrecked 主分片）
 func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
@@ -589,7 +588,10 @@ func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
 	}
 	if mode == "standalone" {
 		for _, l := range gameLevel2Service.GetLevelList(clusterName) {
-			_ = gameLevel2Service.DeleteLevel(clusterName, l.LevelName)
+			if err := gameLevel2Service.DeleteLevel(clusterName, l.Uuid); err != nil {
+				ctx.JSON(http.StatusInternalServerError, vo.Response{Code: 500, Msg: "清理旧世界失败: " + err.Error()})
+				return
+			}
 		}
 	}
 	for i := range worlds {

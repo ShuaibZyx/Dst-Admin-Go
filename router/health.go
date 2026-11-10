@@ -12,6 +12,7 @@ func initHealthRouter(router *gin.RouterGroup) {
 	{
 		group.GET("/check", h.Check)
 		group.GET("/last", h.Last)
+		group.GET("/strict", h.GetStrict)
 		group.POST("/strict", h.SetStrict)
 	}
 }

@@ -87,8 +87,21 @@ func discoverLevels(basePath string) []levelInfo {
 }
 
 func iniValue(s, key string) string {
+	return iniValueIn(s, "", key)
+}
+
+// iniValueIn 取指定 section 内的键值（section 为空则全局首个，M-5）
+func iniValueIn(s, section, key string) string {
+	cur := ""
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			cur = strings.TrimSpace(line[1 : len(line)-1])
+			continue
+		}
+		if section != "" && !strings.EqualFold(cur, section) {
+			continue
+		}
 		if i := strings.Index(line, "="); i > 0 {
 			k := strings.TrimSpace(line[:i])
 			if strings.EqualFold(k, key) {
@@ -165,7 +178,7 @@ func checkShardLink(basePath string, levels []levelInfo) []HealthItem {
 		return []HealthItem{it}
 	}
 	// I4: 面板默认结构的互通配置在 cluster.ini [SHARD] master_ip；server.ini 覆盖为补充
-	if iniValue(clusterS, "master_ip") != "" || iniValue(clusterS, "master_port") != "" {
+	if iniValueIn(clusterS, "SHARD", "master_ip") != "" { // M-5: 以 master_ip 为准
 		it.Message = "互通配置正常（cluster.ini）"
 		return []HealthItem{it}
 	}

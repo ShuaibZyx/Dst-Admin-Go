@@ -1,16 +1,15 @@
 package api
 
 import (
-	"dst-admin-go/config/database"
-	"dst-admin-go/model"
-	"os"
-	"dst-admin-go/utils/netUtils"
 	"crypto/rand"
+	"dst-admin-go/config/database"
 	"dst-admin-go/config/global"
+	"dst-admin-go/model"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/levelConfigUtils"
+	"dst-admin-go/utils/netUtils"
 	"dst-admin-go/utils/systemUtils"
 	"dst-admin-go/vo"
 	"dst-admin-go/vo/level"
@@ -18,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -213,7 +213,6 @@ func (s *ShareApi) ImportClusterConfig(ctx *gin.Context) {
 
 }
 
-
 // DirectConnectConfig 直连配置写入口（I5）
 func (s *ShareApi) DirectConnectConfig(ctx *gin.Context) {
 	var body struct {
@@ -237,6 +236,10 @@ func (s *ShareApi) DirectConnect(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 	levelName := ctx.DefaultQuery("levelName", "Master")
+	if !fileUtils.ValidName(levelName) { // M-9
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal levelName"})
+		return
+	}
 
 	var modeKv, ipKv model.KV
 	database.DB.Where("key = ?", "ip_mode").Find(&modeKv)

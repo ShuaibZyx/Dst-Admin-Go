@@ -86,11 +86,11 @@ func (b *BackupService) DeleteBackup(ctx *gin.Context, fileNames []string) {
 	backupPath := cluster.Backup
 	for _, fileName := range fileNames {
 		filePath, err := fileUtils.SafeJoin(backupPath, fileName)
-	if err != nil {
-		log.Println("非法备份名", err)
-		continue
-	}
-	_ = err
+		if err != nil {
+			log.Println("非法备份名", err)
+			continue
+		}
+		_ = err
 		if !fileUtils.Exists(filePath) {
 			continue
 		}
@@ -122,7 +122,15 @@ func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) error
 	}
 	// I3: 原子交换：旧档先改名，替换失败可回滚，成功后删旧档
 	oldPath := clusterPath + ".restore_old"
-	_ = fileUtils.DeleteDir(oldPath)
+	if fileUtils.Exists(oldPath) { // I-3: 遗留副本可能是唯一存档，先回滚或清场
+		if !fileUtils.Exists(clusterPath) {
+			if err := fileUtils.Rename(oldPath, clusterPath); err == nil {
+				log.Println("检测到上次未完成恢复，已回滚旧存档")
+			}
+		} else {
+			_ = fileUtils.DeleteDir(oldPath)
+		}
+	}
 	if err := fileUtils.Rename(clusterPath, oldPath); err != nil {
 		log.Println("旧存档改名失败:", err)
 		_ = fileUtils.DeleteDir(tmpPath)
@@ -357,7 +365,6 @@ func (b *BackupService) GenBackUpSnapshotName(prefix, clusterName string) string
 	backupName = prefix + backupName
 	return backupName
 }
-
 
 // M9: 备份前对所有世界发 c_save
 func saveAllLevels(console *GameConsoleService, clusterName string) {

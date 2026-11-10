@@ -40,6 +40,11 @@ func (h *HealthCheckApi) Last(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: items})
 }
 
+// GetStrict 当前严格模式（M-9: 前端回读）
+func (h *HealthCheckApi) GetStrict(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"strict": HealthStrictEnabled()}})
+}
+
 // SetStrict 体检严格模式开关（仅手动开服生效）
 func (h *HealthCheckApi) SetStrict(ctx *gin.Context) {
 	var body struct {

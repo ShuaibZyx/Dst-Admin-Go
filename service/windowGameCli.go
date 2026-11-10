@@ -281,9 +281,14 @@ func (receiver *LevelInstance) Kill() {
 		log.Println("kill: process not found", pid)
 		return
 	}
-	// I9: 校验目标确为本游戏进程再杀（防 PID 复用误杀）
+	// I9: 校验目标确为本游戏进程再杀（防 PID 复用误杀）；名字读不到也保守跳过（M-7）
 	if proc, err := process.NewProcess(int32(pid)); err == nil {
-		if name, _ := proc.Name(); name != "" && !strings.Contains(strings.ToLower(name), "dontstarve") {
+		name, nerr := proc.Name()
+		if nerr != nil || name == "" {
+			log.Println("kill skipped, cannot verify process name")
+			return
+		}
+		if !strings.Contains(strings.ToLower(name), "dontstarve") {
 			log.Println("kill skipped, pid reused by:", name)
 			return
 		}
@@ -296,10 +301,13 @@ func (receiver *LevelInstance) Kill() {
 func (receiver *LevelInstance) Send(cmd string) error {
 	receiver.sendLock.Lock()
 	defer receiver.sendLock.Unlock()
-	if receiver.stdin == nil {
+	receiver.lock.Lock()
+	stdin := receiver.stdin // M-2: 与 Start 的写同步
+	receiver.lock.Unlock()
+	if stdin == nil {
 		return fmt.Errorf("stdin not ready")
 	}
-	writer := bufio.NewWriter(receiver.stdin)
+	writer := bufio.NewWriter(stdin)
 	log.Println("cmd: ", cmd)
 	// B13: 仅还原转义引号（\\\" -> \"），不再全局删除反斜杠（会破坏路径与转义）
 	// I1: 原样透传；Lua 转义由构造端 shellUtils.EscapeLuaStr 负责

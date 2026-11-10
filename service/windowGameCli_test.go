@@ -1,9 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"dst-admin-go/utils/shellUtils"
 	"strings"
-	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -60,7 +60,6 @@ type bufWC struct{ b *bytes.Buffer }
 func (w bufWC) Write(p []byte) (int, error) { return w.b.Write(p) }
 func (w bufWC) Close() error                { return nil }
 
-
 // I1: Send 原样透传 + 换行
 func TestSendPassthrough(t *testing.T) {
 	buf := &bytes.Buffer{}
@@ -81,5 +80,17 @@ func TestEscapeLuaStr(t *testing.T) {
 	}
 	if !strings.Contains(got, "\\\"") {
 		t.Fatalf("引号应被转义: %q", got)
+	}
+}
+
+// M-6: Send 不得吞反斜杠（Windows 路径场景），旧全局删反斜杠会破坏
+func TestSendKeepsBackslashes(t *testing.T) {
+	buf := &bytes.Buffer{}
+	inst := &LevelInstance{stdin: bufWC{buf}}
+	if err := inst.Send("c_announce(\"C:\\new\")"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "C:\\new") {
+		t.Fatalf("反斜杠必须保留，实际 %q", buf.String())
 	}
 }

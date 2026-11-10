@@ -3,8 +3,8 @@
 package levelConfigUtils
 
 import (
-	_ "embed"
 	"dst-admin-go/vo/level"
+	_ "embed"
 	"fmt"
 )
 
@@ -53,12 +53,12 @@ func GenerateIAPreset(mode string) []level.World {
 		Leveldataoverride: shipwreckedLevelData,
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{ // C2: 完整 server.ini 字段（零值端口会导致世界无法启动）
-			Name:             "Shipwrecked",
-			Id:               2,
-			ServerPort:       10997,
-			IsMaster:         swMaster,
-			EncodeUserPath:   true,
-			MasterServerPort: 18998,
+			Name:               "Shipwrecked",
+			Id:                 2,
+			ServerPort:         10997,
+			IsMaster:           swMaster,
+			EncodeUserPath:     true,
+			MasterServerPort:   18998,
 			AuthenticationPort: 18767,
 		},
 	}
@@ -69,12 +69,12 @@ func GenerateIAPreset(mode string) []level.World {
 		Leveldataoverride: volcanoLevelData,
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{
-			Name:             "Volcano",
-			Id:               3,
-			ServerPort:       10996,
-			IsMaster:         false,
-			EncodeUserPath:   true,
-			MasterServerPort: 18999,
+			Name:               "Volcano",
+			Id:                 3,
+			ServerPort:         10996,
+			IsMaster:           false,
+			EncodeUserPath:     true,
+			MasterServerPort:   18999,
 			AuthenticationPort: 18768,
 		},
 	}

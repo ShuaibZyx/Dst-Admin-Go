@@ -79,3 +79,42 @@ func TestEnsureLuaJitDisableWithConfigOptionsFirst(t *testing.T) {
 		t.Fatalf("禁用必须生效（不得残留 enabled=true），实际: %s", b)
 	}
 }
+
+// M-1/M-6: 块内无 enabled 字段时插入，且不得误改相邻 mod 的 enabled
+func TestEnsureLuaJitNoEnabledField(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "modoverrides.lua")
+	orig := "return {\n  [\"workshop-3444078585\"] = { configuration_options = { x = 1 } },\n  [\"workshop-123\"] = { enabled = true },\n}\n"
+	if err := os.WriteFile(p, []byte(orig), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureLuaJitModInFile(p, true); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	s2 := string(b)
+	if !strings.Contains(s2, "workshop-123\"] = { enabled = true }") {
+		t.Fatalf("不得误改相邻 mod 的 enabled，实际: %s", s2)
+	}
+	if !strings.Contains(s2, "enabled = true") {
+		t.Fatalf("目标块应 enabled=true，实际: %s", s2)
+	}
+}
+
+// M-1/M-6: 超长 configuration_options（>1000 字符）后仍能定位 enabled
+func TestEnsureLuaJitLongConfigOptions(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "modoverrides.lua")
+	long := strings.Repeat("a = 1, ", 300)
+	orig := "return { [\"workshop-3444078585\"] = { configuration_options = { " + long + " }, enabled = true } }"
+	if err := os.WriteFile(p, []byte(orig), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureLuaJitModInFile(p, false); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if strings.Contains(string(b), "enabled = true") {
+		t.Fatalf("超长配置下禁用必须生效，实际: %.200s", b)
+	}
+}

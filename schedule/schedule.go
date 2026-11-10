@@ -66,6 +66,11 @@ func (s *Schedule) Stop() {
 
 func (s *Schedule) AddJob(task Task) {
 	jobId, err := s.cron.AddFunc(task.Corn, func() {
+		defer func() { // I-1: cron v3 无默认 Recover，panic 会崩进程
+			if r := recover(); r != nil {
+				log.Println("cron task panic:", r)
+			}
+		}()
 		// 发送公告
 		s.SendAnnouncement(task.ClusterName, task.Announcement, task.Sleep, task.Times)
 		task.F(task.ClusterName, task.LevelName)
@@ -131,6 +136,11 @@ func (s *Schedule) initDBTask() {
 	for _, task := range jobTaskList {
 		// 根据类型不同 执行不同的函数
 		entryID, err := s.cron.AddFunc(task.Cron, func() {
+			defer func() { // I-1
+				if r := recover(); r != nil {
+					log.Println("cron task panic:", r)
+				}
+			}()
 			// 发送公告
 			s.SendAnnouncement(task.ClusterName, task.Announcement, task.Sleep, task.Times)
 			StrategyMap[task.Category].Execute(task.ClusterName, task.Uuid)

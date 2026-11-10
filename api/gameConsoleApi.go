@@ -1,7 +1,6 @@
 package api
 
 import (
-	"strings"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
 	"dst-admin-go/utils/clusterUtils"
@@ -15,11 +14,26 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 type GameConsoleApi struct {
+}
+
+// validKuId I-4: 玩家标识白名单（补反引号），所有 kuId 入口复用
+func validKuId(kuId string) bool {
+	if kuId == "" {
+		return false
+	}
+	for _, r := range kuId {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-'
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 var consoleService = service.GameConsoleService{}
@@ -58,6 +72,10 @@ func (g *GameConsoleApi) GetSystemInfo(ctx *gin.Context) {
 
 func (g *GameConsoleApi) SentBroadcast(ctx *gin.Context) {
 	message := ctx.Query("message")
+	if strings.ContainsAny(message, "\r\n") || len(message) > 200 { // I-4: 入口清理
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal message"})
+		return
+	}
 	log.Println("发送公告信息：" + message)
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 
@@ -73,6 +91,10 @@ func (g *GameConsoleApi) SentBroadcast(ctx *gin.Context) {
 func (g *GameConsoleApi) KickPlayer(ctx *gin.Context) {
 
 	kuId := ctx.Query("kuId")
+	if !validKuId(kuId) {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal kuId"})
+		return
+	}
 	log.Println("踢出玩家：" + kuId)
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
@@ -90,6 +112,10 @@ func (g *GameConsoleApi) KickPlayer(ctx *gin.Context) {
 func (g *GameConsoleApi) KillPlayer(ctx *gin.Context) {
 
 	kuId := ctx.Query("kuId")
+	if !validKuId(kuId) {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal kuId"})
+		return
+	}
 	log.Println("kill玩家：" + kuId)
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
@@ -107,6 +133,10 @@ func (g *GameConsoleApi) KillPlayer(ctx *gin.Context) {
 func (g *GameConsoleApi) RespawnPlayer(ctx *gin.Context) {
 
 	kuId := ctx.Query("kuId")
+	if !validKuId(kuId) {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal kuId"})
+		return
+	}
 	log.Println("复活玩家：" + kuId)
 
 	cluster := clusterUtils.GetClusterFromGin(ctx)
@@ -281,13 +311,13 @@ func (g *GameConsoleApi) CavesConsole(ctx *gin.Context) {
 
 func (g *GameConsoleApi) OperatePlayer(ctx *gin.Context) {
 
-	otype := ctx.Param("type")
-	kuId := ctx.Param("kuId")
+	otype := ctx.Query("type") // I-4: 路由 /operate/player 无路径参数，走 query
+	kuId := ctx.Query("kuId")
 	if otype != "0" && otype != "1" && otype != "2" { // I1/M13
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal type"})
 		return
 	}
-	if strings.ContainsAny(kuId, "\\\"" + string(rune(10)) + string(rune(13)) + "$;") { // I1
+	if !validKuId(kuId) {
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal kuId"})
 		return
 	}
@@ -423,12 +453,10 @@ func (g *GameConsoleApi) DownloadDstLogFile(ctx *gin.Context) {
 	clusterName := cluster.ClusterName
 
 	fileName := ctx.Query("fileName")
-	if fileName == "" {
-		log.Panicln("fileName 不能为空")
-	}
 	levelName := ctx.Query("levelName")
-	if levelName == "" { // B3
-		log.Panicln("levelName 不能为空")
+	if fileName == "" || levelName == "" { // M-4: 空值走 400
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "fileName/levelName 不能为空"})
+		return
 	}
 
 	if !fileUtils.ValidName(levelName) || strings.ContainsAny(fileName, "/\\") || strings.Contains(fileName, "..") {
