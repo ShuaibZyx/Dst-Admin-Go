@@ -1,6 +1,10 @@
 package router
 
-import "github.com/gin-gonic/gin"
+import (
+	"strings"
+
+	"github.com/gin-gonic/gin"
+)
 
 func initStaticFile(app *gin.Engine) {
 
@@ -9,7 +13,15 @@ func initStaticFile(app *gin.Engine) {
 		}
 	}()
 	app.Use(func(context *gin.Context) {
-		context.Writer.Header().Set("Cache-Control", "public, max-age=30672000")
+		// 仅带 hash 的静态资源长缓存；HTML/API/SSE 不缓存，避免更新后看到旧界面
+		p := context.Request.URL.Path
+		isHashedAsset := (len(p) > 8 && (p[:8] == "/assets/" || p[:8] == "/static/"))
+		isMiscData := (len(p) > 6 && p[:6] == "/misc/" && !strings.HasSuffix(p, ".json"))
+		if isHashedAsset || isMiscData { // F6: 无 hash 的 JSON 数据不长缓存
+			context.Writer.Header().Set("Cache-Control", "public, max-age=30672000")
+		} else {
+			context.Writer.Header().Set("Cache-Control", "no-cache")
+		}
 	})
 	app.LoadHTMLGlob("dist/index.html") // 添加入口index.html
 	//r.LoadHTMLFiles("dist//*") // 添加资源路径

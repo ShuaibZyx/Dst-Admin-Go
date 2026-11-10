@@ -371,7 +371,8 @@ func saveAllLevels(console *GameConsoleService, clusterName string) {
 	basePath := dstUtils.GetClusterBasePath(clusterName)
 	if entries, err := os.ReadDir(basePath); err == nil {
 		for _, e := range entries {
-			if e.IsDir() {
+			// F9: 仅对含 server.ini 的世界目录发 c_save，避免对 backup 等目录空转
+			if e.IsDir() && fileUtils.Exists(filepath.Join(basePath, e.Name(), "server.ini")) {
 				console.CSave(clusterName, e.Name())
 			}
 		}
