@@ -12,10 +12,8 @@ import (
 	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
-	"gopkg.in/yaml.v2"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"io"
@@ -74,18 +72,13 @@ func initDB() {
 func initConfig() {
 	yamlFile, err := ioutil.ReadFile("./config.yml")
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println("警告: 读取 ./config.yml 失败，使用默认配置: ", err)
+		yamlFile = nil
 	}
-	var _config *config.Config
-	err = yaml.Unmarshal(yamlFile, &_config)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	if _config.AutoUpdateModinfo.UpdateCheckInterval == 0 {
-		_config.AutoUpdateModinfo.UpdateCheckInterval = 10
-	}
-	if _config.AutoUpdateModinfo.CheckInterval == 0 {
-		_config.AutoUpdateModinfo.CheckInterval = 5
+	// C4: Parse 保证非 nil，缺 config.yml / 解析失败均安全回退默认，不再 nil 解引用崩溃
+	_config, perr := config.Parse(yamlFile)
+	if perr != nil {
+		log.Println("警告: config.yml 解析失败，使用默认值: ", perr)
 	}
 	log.Println("config: ", _config)
 	global.Config = _config
