@@ -164,7 +164,8 @@ func (c *ClusterManager) CreateCluster(cluster *model.Cluster) {
 	log.Println("正在安装饥荒。。。。。。")
 	if !fileUtils.Exists(cluster.ForceInstallDir) {
 		// app_update 343050 beta updatebeta validate +quit
-		cmd := "cd " + cluster.SteamCmd + " ; ./steamcmd.sh +login anonymous +force_install_dir " + cluster.ForceInstallDir + " +app_update 343050 validate +quit"
+		// B17: 路径经 BuildSteamCmdInstallCmd 引用，防注入/空格断裂
+		cmd := dstUtils.BuildSteamCmdInstallCmd(cluster.SteamCmd, cluster.ForceInstallDir)
 		output, err := shellUtils.Shell(cmd)
 		if err != nil {
 			log.Panicln("饥荒安装失败")
