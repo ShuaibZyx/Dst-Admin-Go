@@ -34,9 +34,7 @@ func (c *GameConsoleService) SentBroadcast2(clusterName string, levelName string
 		return
 	}
 	if c.GetLevelStatus(clusterName, levelName) {
-		broadcast := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"c_announce(\\\""
-		broadcast += shellUtils.EscapeForStuff(message)
-		broadcast += "\\\")\\n\""
+		broadcast := screenStuffCmd(clusterName, levelName, "c_announce(\""+shellUtils.EscapeLuaStr(message)+"\")")
 		log.Println(broadcast)
 		shellUtils.Shell(broadcast)
 	}
@@ -49,17 +47,13 @@ func (c *GameConsoleService) SentBroadcast(clusterName string, message string) {
 		return
 	}
 	if c.GetLevelStatus(clusterName, "Master") {
-		broadcast := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"c_announce(\\\""
-		broadcast += shellUtils.EscapeForStuff(message)
-		broadcast += "\\\")\\n\""
+		broadcast := screenStuffCmd(clusterName, "Master", "c_announce(\""+shellUtils.EscapeLuaStr(message)+"\")")
 		log.Println(broadcast)
 		shellUtils.Shell(broadcast)
 	}
 
 	if c.GetLevelStatus(clusterName, "Caves") {
-		broadcast2 := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"c_announce(\\\""
-		broadcast2 += shellUtils.EscapeForStuff(message)
-		broadcast2 += "\\\")\\n\""
+		broadcast2 := screenStuffCmd(clusterName, "Caves", "c_announce(\""+shellUtils.EscapeLuaStr(message)+"\")")
 		log.Println(broadcast2)
 		shellUtils.Shell(broadcast2)
 	}
@@ -71,8 +65,8 @@ func (c *GameConsoleService) KickPlayer(clusterName, KuId string) {
 		WindowGameConsoleService.KickPlayer(clusterName, KuId)
 		return
 	}
-	masterCMD := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"TheNet:Kick(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\")\\n\""
-	cavesCMD := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"TheNet:Kick(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\")\\n\""
+	masterCMD := screenStuffCmd(clusterName, "Master", "TheNet:Kick(\""+shellUtils.EscapeLuaStr(KuId)+"\")")
+	cavesCMD := screenStuffCmd(clusterName, "Caves", "TheNet:Kick(\""+shellUtils.EscapeLuaStr(KuId)+"\")")
 
 	shellUtils.Shell(masterCMD)
 	shellUtils.Shell(cavesCMD)
@@ -85,8 +79,8 @@ func (c *GameConsoleService) KillPlayer(clusterName, KuId string) {
 		return
 	}
 
-	masterCMD := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"UserToPlayer(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\"):PushEvent('death')\\n\""
-	cavesCMD := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"UserToPlayer(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\"):PushEvent('death')\\n\""
+	masterCMD := screenStuffCmd(clusterName, "Master", "UserToPlayer(\""+shellUtils.EscapeLuaStr(KuId)+"\"):PushEvent('death')")
+	cavesCMD := screenStuffCmd(clusterName, "Caves", "UserToPlayer(\""+shellUtils.EscapeLuaStr(KuId)+"\"):PushEvent('death')")
 
 	shellUtils.Shell(masterCMD)
 	shellUtils.Shell(cavesCMD)
@@ -99,8 +93,8 @@ func (c *GameConsoleService) RespawnPlayer(clusterName string, KuId string) {
 		return
 	}
 
-	masterCMD := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"UserToPlayer(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\"):PushEvent('respawnfromghost')\\n\""
-	cavesCMD := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"UserToPlayer(\\\"" + shellUtils.EscapeForStuff(KuId) + "\\\"):PushEvent('respawnfromghost')\\n\""
+	masterCMD := screenStuffCmd(clusterName, "Master", "UserToPlayer(\""+shellUtils.EscapeLuaStr(KuId)+"\"):PushEvent('respawnfromghost')")
+	cavesCMD := screenStuffCmd(clusterName, "Caves", "UserToPlayer(\""+shellUtils.EscapeLuaStr(KuId)+"\"):PushEvent('respawnfromghost')")
 
 	shellUtils.Shell(masterCMD)
 	shellUtils.Shell(cavesCMD)
@@ -116,8 +110,8 @@ func (c *GameConsoleService) RollBack(clusterName string, dayNum int) {
 	days := fmt.Sprint(dayNum)
 	c.SentBroadcast(clusterName, ":pig 正在回档"+days+"天")
 
-	masterCMD := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"c_rollback(" + shellUtils.EscapeShellDQ(days) + ")\\n\""
-	cavesCMD := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"c_rollback(" + shellUtils.EscapeShellDQ(days) + ")\\n\""
+	masterCMD := screenStuffCmd(clusterName, "Master", "c_rollback("+days+")")
+	cavesCMD := screenStuffCmd(clusterName, "Caves", "c_rollback("+days+")")
 
 	shellUtils.Shell(masterCMD)
 	shellUtils.Shell(cavesCMD)
@@ -143,8 +137,8 @@ func (c *GameConsoleService) Regenerateworld(clusterName string) {
 
 	c.SentBroadcast(clusterName, ":pig 即将重置世界！！！")
 
-	masterCMD := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"c_regenerateworld()\\n\""
-	cavesCMD := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"c_regenerateworld()\\n\""
+	masterCMD := screenStuffCmd(clusterName, "Master", "c_regenerateworld()")
+	cavesCMD := screenStuffCmd(clusterName, "Caves", "c_regenerateworld()")
 	shellUtils.Shell(masterCMD)
 	shellUtils.Shell(cavesCMD)
 }
@@ -154,7 +148,7 @@ func (c *GameConsoleService) MasterConsole(clusterName string, command string) {
 		WindowGameConsoleService.MasterConsole(clusterName, command)
 		return
 	}
-	cmd := "screen -S \"" + screenKey.Key(clusterName, "Master") + "\" -p 0 -X stuff \"" + shellUtils.EscapeShellDQ(command) + "\\n\""
+	cmd := screenStuffCmd(clusterName, "Master", command)
 	shellUtils.Shell(cmd)
 }
 
@@ -163,7 +157,7 @@ func (c *GameConsoleService) CavesConsole(clusterName string, command string) {
 		WindowGameConsoleService.CavesConsole(clusterName, command)
 		return
 	}
-	cmd := "screen -S \"" + screenKey.Key(clusterName, "Caves") + "\" -p 0 -X stuff \"" + shellUtils.EscapeShellDQ(command) + "\\n\""
+	cmd := screenStuffCmd(clusterName, "Caves", command)
 	shellUtils.Shell(cmd)
 }
 
@@ -189,8 +183,16 @@ func (c *GameConsoleService) OperatePlayer(clusterName string, otype, kuId strin
 	c.CavesConsole(clusterName, command)
 }
 
+// screenStuffCmd 构建 screen stuff 命令:会话 key 与 lua 命令均经 EscapeShellDQ 转义,
+// 防 clusterName/levelName/command 注入(A3)。key 与 lua 都在双引号内,故用 EscapeShellDQ。
+func screenStuffCmd(clusterName, levelName, luaCommand string) string {
+	key := shellUtils.EscapeShellDQ(screenKey.Key(clusterName, levelName))
+	lua := shellUtils.EscapeShellDQ(luaCommand)
+	return "screen -S \"" + key + "\" -p 0 -X stuff \"" + lua + "\\n\""
+}
+
 func PsAux(processName string) string {
-	cmd := "ps -aux | grep -v grep |grep '" + processName + "' |sed -n '2P'|awk '{print $3,$4,$5,$6}'"
+	cmd := "ps -aux | grep -v grep |grep " + shellUtils.Quote(processName) + " |sed -n '2P'|awk '{print $3,$4,$5,$6}'"
 	res, err := shellUtils.Shell(cmd)
 	if err != nil {
 		log.Println("ps -aux |grep " + processName + " error: " + err.Error())
@@ -225,7 +227,7 @@ func (c *GameConsoleService) SendCommand(clusterName string, levelName string, c
 		WindowGameConsoleService.SendCommand(clusterName, levelName, command)
 		return
 	}
-	cmd := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"" + shellUtils.EscapeShellDQ(command) + "\\n\""
+	cmd := screenStuffCmd(clusterName, levelName, command)
 	shellUtils.Shell(cmd)
 }
 
@@ -238,7 +240,7 @@ func (c *GameConsoleService) CSave(clusterName string, levelName string) {
 
 	log.Println("正在 s_save() 存档", clusterName, levelName)
 	command := "c_save()"
-	cmd := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"" + shellUtils.EscapeShellDQ(command) + "\\n\""
+	cmd := screenStuffCmd(clusterName, levelName, command)
 	shellUtils.Shell(cmd)
 
 	time.Sleep(5 * time.Second)
