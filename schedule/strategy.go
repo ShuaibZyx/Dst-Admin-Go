@@ -39,13 +39,16 @@ type UpdateStrategy struct{}
 
 func (u *UpdateStrategy) Execute(clusterName string, levelName string) {
 	log.Println("正在定时更新游戏 clusterName: ", clusterName)
-	err := gameService.UpdateGame(clusterName)
-	if err != nil {
-		log.Println("更新游戏失败: ", err)
-		return
-	}
-	time.Sleep(1 * time.Minute)
-	gameService.StartGame(clusterName)
+	// 停服→更新→启动:panic/失败也确保启动,避免"已停服未启动"半成品状态
+	runStopStart(func() error {
+		if err := gameService.UpdateGame(clusterName); err != nil {
+			return err
+		}
+		time.Sleep(1 * time.Minute)
+		return nil
+	}, func() {
+		gameService.StartGame(clusterName)
+	})
 }
 
 type StartStrategy struct{}
