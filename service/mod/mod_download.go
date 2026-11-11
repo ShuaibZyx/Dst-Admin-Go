@@ -7,7 +7,6 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
-	"dst-admin-go/utils/shellUtils"
 	"encoding/json"
 	"fmt"
 	lua "github.com/yuin/gopher-lua"
@@ -111,44 +110,28 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 	if _, err := os.Stat(mod_path); err == nil {
 		fmt.Println("Mod already downloaded to:", mod_path)
 	} else {
-		// 调用 SteamCMD 命令下载 mod
+		// 调用 SteamCMD 命令下载 mod(exec.Command 无 shell,防注入/含空格路径断裂;等待下载完成)
 		steamcmd := dstConfig.Steamcmd
+		var exe string
 		if runtime.GOOS == "windows" {
-			cmd := "cd /d " + steamcmd + " && Start steamcmd.exe +login anonymous +force_install_dir " + mod_download_path + " +workshop_download_item 322330 " + mod_id + " +quit"
-			log.Println("正在下载模组 command: ", cmd)
-			_, err := shellUtils.ExecuteCommandInWin(cmd)
-
-			if err != nil {
-				log.Panicln("下载mod失败，请检查steamcmd路径是否配置正确", err)
-				return make(map[string]interface{})
-			}
+			exe = filepath.Join(steamcmd, "steamcmd.exe")
+		} else if fileUtils.Exists(filepath.Join(steamcmd, "steamcmd")) {
+			exe = filepath.Join(steamcmd, "steamcmd")
 		} else {
-			var cmd *exec.Cmd
-			if fileUtils.Exists(filepath.Join(steamcmd, "steamcmd")) {
-				cmd = exec.Command(filepath.Join(steamcmd, "steamcmd"), "+login anonymous", "+force_install_dir", mod_download_path, "+workshop_download_item 322330 "+mod_id, "+quit")
-			} else {
-				cmd = exec.Command(filepath.Join(steamcmd, "steamcmd.sh"), "+login anonymous", "+force_install_dir", mod_download_path, "+workshop_download_item 322330 "+mod_id, "+quit")
-			}
-
-			log.Println("正在下载模组 command: ", cmd)
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Panicln("下载mod失败，请检查steamcmd路径是否配置正确", err)
-				return make(map[string]interface{})
-			}
-
-			// 解析 SteamCMD 输出，提取 mod 文件路径
-			re := regexp.MustCompile(`Downloaded item \d+ to "([^"]+)"`)
-			match := re.FindStringSubmatch(string(output))
-			if len(match) < 2 {
-				fmt.Println("Error parsing output")
-				log.Println(string(output))
-				return make(map[string]interface{})
-			}
-			path := match[1]
-			fmt.Println("Mod downloaded to:", path)
+			exe = filepath.Join(steamcmd, "steamcmd.sh")
 		}
-
+		cmd := exec.Command(exe, steamCmdDownloadArgs(mod_download_path, mod_id)...)
+		log.Println("正在下载模组 command: ", cmd)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Panicln("下载mod失败，请检查steamcmd路径是否配置正确", err)
+			return make(map[string]interface{})
+		}
+		// 解析 SteamCMD 输出,提取 mod 文件路径(仅日志;mod_path 已由 mod_download_path 计算)
+		re := regexp.MustCompile(`Downloaded item \d+ to "([^"]+)"`)
+		if match := re.FindStringSubmatch(string(output)); len(match) >= 2 {
+			fmt.Println("Mod downloaded to:", match[1])
+		}
 	}
 
 	// 查找 modinfo.lua 文件
@@ -158,6 +141,17 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 		return make(map[string]interface{})
 	}
 	return read_mod_info(lang, mod_id, modinfo_path)
+}
+
+// steamCmdDownloadArgs 返回 steamcmd 下载 mod 的参数(不含可执行文件)。
+// 每个 token 单独 argv:经 exec.Command 无 shell 传参,防注入、防含空格路径断裂(B17)。
+func steamCmdDownloadArgs(modDownloadPath, modID string) []string {
+	return []string{
+		"+login", "anonymous",
+		"+force_install_dir", modDownloadPath,
+		"+workshop_download_item", "322330", modID,
+		"+quit",
+	}
 }
 
 func read_mod_info(lang, mod_id, modinfo_path string) map[string]interface{} {
