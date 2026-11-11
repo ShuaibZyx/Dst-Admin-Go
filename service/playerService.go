@@ -154,7 +154,7 @@ func init() {
 		// command := "for i, v in ipairs(TheNet:GetClientTable()) do  print(string.format(\\\"%s %d %s %s %s %s \\\", " + "'" + id + "'" + ",i-1, string.format('%03d', v.playerage), v.userid, v.name, v.prefab)) end"
 		// command := "for i, v in ipairs(AllPlayers) do  print(string.format(\\\"%s %d %s %s %s %s \\\", " + "'" + id + "'" + ",i-1, string.format('%03d', v.playerage), v.userid, v.name, v.prefab)) end"
 
-		playerCMD := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"" + command + "\\n\""
+		playerCMD := "screen -S \"" + shellUtils.EscapeShellDQ(screenKey.Key(clusterName, levelName)) + "\" -p 0 -X stuff \"" + command + "\\n\""
 		log.Println("playerCMD", playerCMD)
 		shellUtils.Shell(playerCMD)
 
@@ -175,25 +175,9 @@ func init() {
 
 				log.Println(line)
 
-				// 提取 {} 中的内容
-				reCurlyBraces := regexp.MustCompile(`\{([^}]*)\}`)
-				curlyBracesMatches := reCurlyBraces.FindStringSubmatch(line)
-
-				if len(curlyBracesMatches) > 1 {
-					// curlyBracesMatches[1] 包含 {} 中的内容
-					contentInsideCurlyBraces := curlyBracesMatches[1]
-
-					// 提取 [] 中的内容
-					reSquareBrackets := regexp.MustCompile(`\[([^\]]*)\]`)
-					squareBracketsMatches := reSquareBrackets.FindAllStringSubmatch(contentInsideCurlyBraces, -1)
-					var result []string
-					for _, match := range squareBracketsMatches {
-						// match[1] 包含 [] 中的内容
-						contentInsideSquareBrackets := match[1]
-						result = append(result, contentInsideSquareBrackets)
-					}
-					playerVO := vo.PlayerVO{Key: result[1], Day: result[2], KuId: result[3], Name: result[4], Role: result[5]}
-					playerVOList = append(playerVOList, playerVO)
+				// 提取 {} 与 [] 解析玩家(含长度校验,防短行 panic)
+				if playerVO := parsePlayerVO(line); playerVO != nil {
+					playerVOList = append(playerVOList, *playerVO)
 				}
 			}
 		}
@@ -217,6 +201,26 @@ func init() {
 }
 
 type PlayerService struct {
+}
+
+// parsePlayerVO 从日志行解析玩家信息;[] 组不足 6 时返回 nil(C7: 长度校验防 result[1..5] 索引 panic)。
+func parsePlayerVO(line string) *vo.PlayerVO {
+	reCurlyBraces := regexp.MustCompile(`\{([^}]*)\}`)
+	curlyBracesMatches := reCurlyBraces.FindStringSubmatch(line)
+	if len(curlyBracesMatches) <= 1 {
+		return nil
+	}
+	contentInsideCurlyBraces := curlyBracesMatches[1]
+	reSquareBrackets := regexp.MustCompile(`\[([^\]]*)\]`)
+	squareBracketsMatches := reSquareBrackets.FindAllStringSubmatch(contentInsideCurlyBraces, -1)
+	var result []string
+	for _, match := range squareBracketsMatches {
+		result = append(result, match[1])
+	}
+	if len(result) < 6 {
+		return nil
+	}
+	return &vo.PlayerVO{Key: result[1], Day: result[2], KuId: result[3], Name: result[4], Role: result[5]}
 }
 
 func (p *PlayerService) GetPlayerList(clusterName string, levelName string) []vo.PlayerVO {
@@ -272,7 +276,7 @@ func (p *PlayerService) GetPlayerList(clusterName string, levelName string) []vo
 	if isWindows() {
 		clusterContainer.Send(clusterName, levelName, command)
 	} else {
-		playerCMD := "screen -S \"" + screenKey.Key(clusterName, levelName) + "\" -p 0 -X stuff \"" + command + "\\n\""
+		playerCMD := "screen -S \"" + shellUtils.EscapeShellDQ(screenKey.Key(clusterName, levelName)) + "\" -p 0 -X stuff \"" + command + "\\n\""
 		shellUtils.Shell(playerCMD)
 	}
 
@@ -300,21 +304,9 @@ func (p *PlayerService) GetPlayerList(clusterName string, levelName string) []vo
 
 			// 检查是否是数据信号
 			if strings.Contains(line.Text, id) && strings.Contains(line.Text, "KU") {
-				// 正则解析逻辑
-				reCurlyBraces := regexp.MustCompile(`\{([^}]*)\}`)
-				curlyBracesMatches := reCurlyBraces.FindStringSubmatch(line.Text)
-				if len(curlyBracesMatches) > 1 {
-					contentInsideCurlyBraces := curlyBracesMatches[1]
-					reSquareBrackets := regexp.MustCompile(`\[([^\]]*)\]`)
-					squareBracketsMatches := reSquareBrackets.FindAllStringSubmatch(contentInsideCurlyBraces, -1)
-					var result []string
-					for _, match := range squareBracketsMatches {
-						result = append(result, match[1])
-					}
-					if len(result) >= 6 {
-						playerVO := vo.PlayerVO{Key: result[1], Day: result[2], KuId: result[3], Name: result[4], Role: result[5]}
-						uniquePlayers[playerVO.KuId] = playerVO
-					}
+				// 正则解析(含长度校验)
+				if playerVO := parsePlayerVO(line.Text); playerVO != nil {
+					uniquePlayers[playerVO.KuId] = *playerVO
 				}
 			}
 		case <-ctx.Done():
