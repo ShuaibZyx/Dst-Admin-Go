@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"dst-admin-go/config/database"
+	"dst-admin-go/config/global"
 	"dst-admin-go/model"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/fileUtils"
@@ -142,7 +143,7 @@ func GetPublishedFileDetailsBatched(workshopIds []string, batchSize int) ([]Publ
 func GetPublishedFileDetailsWithGet(workshopIds []string) ([]Publishedfiledetail, error) {
 	urlStr := "http://api.steampowered.com/IPublishedFileService/GetDetails/v1/"
 	data := url.Values{}
-	data.Set("key", steamAPIKey)
+	data.Set("key", global.SteamAPIKey())
 	data.Set("language", "6")
 	for i := range workshopIds {
 		data.Set("publishedfileids["+strconv.Itoa(i)+"]", workshopIds[i])

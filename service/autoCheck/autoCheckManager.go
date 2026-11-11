@@ -2,6 +2,7 @@ package autoCheck
 
 import (
 	"dst-admin-go/config/database"
+	"dst-admin-go/config/global"
 	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
@@ -23,9 +24,8 @@ import (
 )
 
 const (
-	steamAPIKey = "73DF9F781D195DFD3D19DED1CB72EEE6"
-	appID       = 322330
-	language    = 6
+	appID    = 322330
+	language = 6
 )
 
 var Manager *AutoCheckManager
@@ -457,7 +457,7 @@ func diffFetchModInfo2(activeModMap map[string]dstUtils.WorkshopItem) (noUpdate 
 
 	urlStr := "http://api.steampowered.com/IPublishedFileService/GetDetails/v1/"
 	data := url.Values{}
-	data.Set("key", steamAPIKey)
+	data.Set("key", global.SteamAPIKey())
 	data.Set("language", "6")
 	for i := range modIds {
 		data.Set("publishedfileids["+strconv.Itoa(i)+"]", modIds[i])
