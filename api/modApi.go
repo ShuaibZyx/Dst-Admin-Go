@@ -77,6 +77,21 @@ func (m *ModApi) GetModInfo(ctx *gin.Context) {
 	})
 }
 
+// GetModSubscribed 查询模组是否已订阅/可用(海难/火山世界创建闸门用)
+func (m *ModApi) GetModSubscribed(ctx *gin.Context) {
+	modId := ctx.Param("modId")
+	clusterName := ctx.Query("cluster")
+	if clusterName == "" {
+		clusterName = "Cluster1"
+	}
+	subscribed := mod2.IsModSubscribed(clusterName, modId)
+	ctx.JSON(http.StatusOK, vo.Response{
+		Code: 200,
+		Msg:  "success",
+		Data: map[string]interface{}{"modId": modId, "subscribed": subscribed},
+	})
+}
+
 func (m *ModApi) GetMyModList(ctx *gin.Context) {
 
 	var modInfos []model.ModInfo

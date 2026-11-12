@@ -6,6 +6,7 @@ import (
 	"dst-admin-go/service"
 	"dst-admin-go/service/autoCheck"
 	"dst-admin-go/service/healthCheck"
+	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
@@ -510,6 +511,12 @@ func (g *GameLevel2Api) DeleteLevel(ctx *gin.Context) {
 	})
 }
 
+// isIAModWorld 判定 leveldataoverride 是否为 IA 模组世界(海难/火山)
+func isIAModWorld(leveldataoverride string) bool {
+	return strings.Contains(leveldataoverride, `location="shipwrecked"`) ||
+		strings.Contains(leveldataoverride, `location="volcano"`)
+}
+
 func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
@@ -517,6 +524,14 @@ func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 	err := ctx.ShouldBind(newLevel)
 	if err != nil {
 		log.Panicln("参数解析错误", err)
+	}
+
+	// 闸门:海难/火山是 IA 模组世界,模组未订阅/下载则世界无法加载
+	if isIAModWorld(newLevel.Leveldataoverride) {
+		if !mod.IsModSubscribed(clusterName, "workshop-1467214795") {
+			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "海难/火山是岛屿冒险(IA)模组世界，需先订阅并启用 workshop-1467214795 模组"})
+			return
+		}
 	}
 
 	err = gameLevel2Service.CreateLevel(clusterName, newLevel)
@@ -581,6 +596,11 @@ func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
 	mode := ctx.Query("mode")
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
+	// 闸门:海难/火山是 IA 模组世界,模组未订阅/下载则世界无法加载
+	if !mod.IsModSubscribed(clusterName, "workshop-1467214795") {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "海难/火山是岛屿冒险(IA)模组世界，需先订阅并启用 workshop-1467214795 模组"})
+		return
+	}
 	worlds := levelConfigUtils.GenerateIAPreset(mode)
 	if worlds == nil {
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "mode 必须是 overlay 或 standalone"})
