@@ -5,7 +5,6 @@ package levelConfigUtils
 import (
 	"dst-admin-go/vo/level"
 	_ "embed"
-	"fmt"
 )
 
 //go:embed templates/shipwrecked_leveldataoverride.lua
@@ -47,9 +46,10 @@ func GenerateIAPreset(mode string) []level.World {
 		return nil
 	}
 	sw := level.World{
-		LevelName:         "Shipwrecked",
-		IsMaster:          swMaster,
-		Uuid:              fmt.Sprintf("ia-shipwrecked-%s", mode),
+		LevelName: "Shipwrecked",
+		IsMaster:  swMaster,
+		// uuid 与快捷创建卡一致(Shipwrecked/Volcano),避免两条路径各建一套(重复世界)
+		Uuid:              "Shipwrecked",
 		Leveldataoverride: shipwreckedLevelData,
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{ // C2: 完整 server.ini 字段（零值端口会导致世界无法启动）
@@ -63,9 +63,9 @@ func GenerateIAPreset(mode string) []level.World {
 		},
 	}
 	vol := level.World{
-		LevelName:         "Volcano",
-		IsMaster:          false,
-		Uuid:              fmt.Sprintf("ia-volcano-%s", mode),
+		LevelName: "Volcano",
+		IsMaster:  false,
+		Uuid:      "Volcano",
 		Leveldataoverride: volcanoLevelData,
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{
