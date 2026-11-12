@@ -54,7 +54,7 @@ func GenerateIAPreset(mode string) []level.World {
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{ // C2: 完整 server.ini 字段（零值端口会导致世界无法启动）
 			Name:               "Shipwrecked",
-			Id:                 2,
+			Id:                 3, // Master=1, Caves=2, Shipwrecked=3, Volcano=4(唯一分片 id)
 			ServerPort:         10997,
 			IsMaster:           swMaster,
 			EncodeUserPath:     true,
@@ -70,7 +70,7 @@ func GenerateIAPreset(mode string) []level.World {
 		Modoverrides:      iaModoverrides(true),
 		ServerIni: &level.ServerIni{
 			Name:               "Volcano",
-			Id:                 3,
+			Id:                 4,
 			ServerPort:         10996,
 			IsMaster:           false,
 			EncodeUserPath:     true,
