@@ -39,7 +39,6 @@ return {
     rock_obsidian="default",
     rock_obsidian_regrowth="default",
     season_start="default",
-    snake_setting="default",
     spider_warriors="default",
     spiderqueen="default",
     spiders_setting="default",
