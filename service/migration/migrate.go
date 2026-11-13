@@ -24,11 +24,19 @@ func Migrate(units []MigrationUnit, selectedIDs []string, gameRunning bool) []Mi
 		selected[id] = true
 	}
 	var results []MigrateResult
+	matched := map[string]bool{}
 	for _, u := range units {
 		if !selected[u.ID] {
 			continue
 		}
+		matched[u.ID] = true
 		results = append(results, migrateOne(u, gameRunning))
+	}
+	// 选中但不存在的 id 也回结果，便于前端提示
+	for _, id := range selectedIDs {
+		if !matched[id] {
+			results = append(results, MigrateResult{ID: id, OK: false, Message: "未知单元"})
+		}
 	}
 	return results
 }

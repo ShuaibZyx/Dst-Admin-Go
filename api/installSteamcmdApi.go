@@ -210,10 +210,18 @@ func (i *InstallSteamCmd) handle(eventCh chan string, stopCh chan string) {
 func saveDstConfig() {
 	// 写入到配置文件里面
 	config := dstConfigUtils.GetDstConfig()
-	config.Steamcmd = filepath.Join(consts.HomePath, "steamcmd")
-	config.Force_install_dir = filepath.Join(consts.HomePath, "dst-dedicated-server")
-	config.Backup = dstConfigUtils.KleiDstPath()
-	config.Mod_download_path = dstConfigUtils.KleiDstPath()
+	if config.Parent_path != "" {
+		// 设置了父级文件夹：全新安装落进父级树（§8 相对默认值）
+		config.Steamcmd = dstConfigUtils.DefaultSteamcmd
+		config.Force_install_dir = dstConfigUtils.DefaultServerDir
+		config.Backup = dstConfigUtils.DefaultBackup
+		config.Mod_download_path = dstConfigUtils.DefaultMod
+	} else {
+		config.Steamcmd = filepath.Join(consts.HomePath, "steamcmd")
+		config.Force_install_dir = filepath.Join(consts.HomePath, "dst-dedicated-server")
+		config.Backup = dstConfigUtils.KleiDstPath()
+		config.Mod_download_path = dstConfigUtils.KleiDstPath()
+	}
 	config.Cluster = "MyDediServer"
 
 	dstConfigUtils.SaveDstConfig(&config)

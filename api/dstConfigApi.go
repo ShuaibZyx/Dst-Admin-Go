@@ -19,12 +19,35 @@ type DstConfigApi struct {
 
 var initEvnService = service.InitService{}
 
-func (d *DstConfigApi) GetDstConfig(ctx *gin.Context) {
+// dstConfigResponse 原始配置 + 计算字段（§12 路径预览 / container_mode）
+type dstConfigResponse struct {
+	dstConfigUtils.DstConfig
+	Container_mode bool              `json:"container_mode"`
+	Resolved       map[string]string `json:"resolved"`
+}
 
+func (d *DstConfigApi) GetDstConfig(ctx *gin.Context) {
+	cfg := dstConfigUtils.GetDstConfig()
+	parent := cfg.Parent_path
+	psr := cfg.Persistent_storage_root
+	if parent != "" {
+		psr = dstConfigUtils.ResolvePath(parent, psr, dstConfigUtils.DefaultWorlds)
+	}
+	resp := dstConfigResponse{
+		DstConfig:      cfg,
+		Container_mode: containerMode(),
+		Resolved: map[string]string{
+			"steamcmd":                dstConfigUtils.ResolvePath(parent, cfg.Steamcmd, dstConfigUtils.DefaultSteamcmd),
+			"force_install_dir":       dstConfigUtils.ResolvePath(parent, cfg.Force_install_dir, dstConfigUtils.DefaultServerDir),
+			"backup":                  dstConfigUtils.ResolvePath(parent, cfg.Backup, dstConfigUtils.DefaultBackup),
+			"mod_download_path":       dstConfigUtils.ResolvePath(parent, cfg.Mod_download_path, dstConfigUtils.DefaultMod),
+			"persistent_storage_root": psr,
+		},
+	}
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
 		Msg:  "success",
-		Data: dstConfigUtils.GetDstConfig(),
+		Data: resp,
 	})
 }
 
