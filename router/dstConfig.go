@@ -21,6 +21,9 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 		migration.POST("/execute", migrationApi.ExecuteMigration)
 	}
 
+	fsApi := api.FsApi{}
+	router.GET("/api/fs/dirs", fsApi.ListDirs)
+
 	kvApi := api.KvApi{}
 	kv := router.Group("/api/kv")
 	{
