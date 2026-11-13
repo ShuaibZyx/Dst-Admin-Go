@@ -72,14 +72,14 @@ func TestListDirsEmptyPathUsesHome(t *testing.T) {
 	}
 }
 
-func TestListDirsComputerSentinelListsDrives(t *testing.T) {
+func TestListDirsRootsSentinelListsDrives(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := gin.New()
 	fsApi := FsApi{}
 	app.GET("/api/fs/dirs", fsApi.ListDirs)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/fs/dirs?path=__computer__", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/fs/dirs?path=__roots__", nil)
 	app.ServeHTTP(w, req)
 	var resp struct {
 		Code int `json:"code"`

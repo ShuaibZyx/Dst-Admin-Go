@@ -14,43 +14,36 @@ import (
 // FsApi 服务端目录浏览（根目录选择弹窗用）
 type FsApi struct{}
 
-// ComputerSentinel 此电脑视图：列出各盘符根
-const ComputerSentinel = "__computer__"
+// 快捷位置哨兵路径（前端"位置"按钮）
+const (
+	RootsSentinel = "__roots__" // 文件系统：Windows=盘符列表；Unix=/ 顶层目录
+	AppSentinel   = "__app__"   // 面板目录：当前工作目录
+)
 
-// ListDirs 列出 path 下的子目录；path 为空时从用户主目录开始；__computer__ 列盘符
+type dirItem struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// ListDirs 列出 path 下的子目录。
+// path 为空 → 用户目录；__roots__ → 文件系统视图；__app__ → 面板目录。
 func (f *FsApi) ListDirs(ctx *gin.Context) {
 	path := ctx.Query("path")
-	type dirItem struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-	}
-	if path == ComputerSentinel {
-		var drives []dirItem
-		if runtime.GOOS == "windows" {
-			for c := 'A'; c <= 'Z'; c++ {
-				root := string(c) + `:\`
-				if info, err := os.Stat(root); err == nil && info.IsDir() {
-					drives = append(drives, dirItem{Name: root, Path: root})
-				}
-			}
-		} else {
-			for _, root := range []string{"/", "/app", "/home", "/mnt", "/media", "/opt", "/root"} {
-				if info, err := os.Stat(root); err == nil && info.IsDir() {
-					drives = append(drives, dirItem{Name: root, Path: root})
-				}
-			}
-		}
-		if drives == nil {
-			drives = []dirItem{}
-		}
-		ctx.JSON(http.StatusOK, vo.Response{
-			Code: 200,
-			Msg:  "success",
-			Data: gin.H{"path": ComputerSentinel, "parent": ComputerSentinel, "dirs": drives},
-		})
+
+	switch path {
+	case RootsSentinel:
+		ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{
+			"path": RootsSentinel, "parent": RootsSentinel, "dirs": listRoots(),
+		}})
 		return
-	}
-	if path == "" {
+	case AppSentinel:
+		cwd, err := os.Getwd()
+		if err != nil {
+			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: err.Error()})
+			return
+		}
+		path = cwd
+	case "":
 		home, err := systemUtils.Home()
 		if err != nil {
 			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: err.Error()})
@@ -58,6 +51,7 @@ func (f *FsApi) ListDirs(ctx *gin.Context) {
 		}
 		path = home
 	}
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		ctx.JSON(http.StatusOK, vo.Response{Code: 404, Msg: err.Error()})
@@ -78,4 +72,31 @@ func (f *FsApi) ListDirs(ctx *gin.Context) {
 		Msg:  "success",
 		Data: gin.H{"path": path, "parent": filepath.Dir(path), "dirs": dirs},
 	})
+}
+
+// listRoots 文件系统视图：Windows=盘符；Unix=/ 的顶层目录
+func listRoots() []dirItem {
+	var roots []dirItem
+	if runtime.GOOS == "windows" {
+		for c := 'A'; c <= 'Z'; c++ {
+			root := string(c) + `:\`
+			if info, err := os.Stat(root); err == nil && info.IsDir() {
+				roots = append(roots, dirItem{Name: root, Path: root})
+			}
+		}
+	} else {
+		entries, err := os.ReadDir("/")
+		if err != nil {
+			return []dirItem{}
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				roots = append(roots, dirItem{Name: e.Name(), Path: "/" + e.Name()})
+			}
+		}
+	}
+	if roots == nil {
+		roots = []dirItem{}
+	}
+	return roots
 }
