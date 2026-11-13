@@ -90,7 +90,7 @@ const (
 	DefaultServerDir = "dst-dedicated-server"
 	DefaultBackup    = "backup"
 	DefaultMod       = "mod"
-	DefaultWorlds    = "worlds"
+	DefaultWorlds    = "world"
 )
 
 // toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
