@@ -71,3 +71,29 @@ func TestListDirsEmptyPathUsesHome(t *testing.T) {
 		t.Fatalf("code=%d path=%q body=%s", resp.Code, resp.Data.Path, w.Body.String())
 	}
 }
+
+func TestListDirsComputerSentinelListsDrives(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := gin.New()
+	fsApi := FsApi{}
+	app.GET("/api/fs/dirs", fsApi.ListDirs)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/fs/dirs?path=__computer__", nil)
+	app.ServeHTTP(w, req)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Dirs []struct {
+				Name string `json:"name"`
+				Path string `json:"path"`
+			} `json:"dirs"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err, w.Body.String())
+	}
+	if resp.Code != 200 || len(resp.Data.Dirs) == 0 {
+		t.Fatalf("code=%d dirs=%v body=%s", resp.Code, resp.Data.Dirs, w.Body.String())
+	}
+}
