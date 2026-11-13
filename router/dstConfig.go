@@ -14,12 +14,8 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 		dstConfig.POST("", dstConfigApi.SaveDstConfig)
 	}
 
-	migrationApi := api.MigrationApi{}
-	migration := router.Group("/api/dst/config/migration")
-	{
-		migration.GET("/scan", migrationApi.GetMigrationScan)
-		migration.POST("/execute", migrationApi.ExecuteMigration)
-	}
+	importApi := api.ImportApi{}
+	router.POST("/api/dst/config/cluster/import", importApi.ImportCluster)
 
 	kvApi := api.KvApi{}
 	kv := router.Group("/api/kv")

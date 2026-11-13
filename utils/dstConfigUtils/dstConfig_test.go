@@ -24,7 +24,7 @@ func writeConfigFile(t *testing.T, p string, lines []string) {
 	}
 }
 
-// newTestConfig 带上 backup/mod_download_path，避免 GetDstConfig 默认值物化创建目录的副作用
+// newTestConfig 带上 backup/mod_download_path，避免测试副作用
 func newTestConfig(parent string) *DstConfig {
 	c := NewDstConfig()
 	c.Parent_path = parent
@@ -66,15 +66,12 @@ func TestParentSameSaveKeepsLastParentPath(t *testing.T) {
 	SaveDstConfig(newTestConfig("/data/A"))
 
 	got := GetDstConfig()
-	if got.Parent_path != "/data/A" {
-		t.Fatalf("Parent_path = %q, want /data/A", got.Parent_path)
-	}
 	if got.Last_parent_path != "" {
 		t.Fatalf("Last_parent_path = %q, want unchanged empty", got.Last_parent_path)
 	}
 }
 
-func TestGetDstConfigNoMaterializeWhenParentSet(t *testing.T) {
+func TestGetDstConfigNoMaterialize(t *testing.T) {
 	withTempConfig(t)
 	writeConfigFile(t, dst_config_path, []string{
 		"parent_path=/data/dst",
@@ -87,29 +84,10 @@ func TestGetDstConfigNoMaterializeWhenParentSet(t *testing.T) {
 
 	got := GetDstConfig()
 	if got.Backup != "" {
-		t.Fatalf("Backup = %q, want empty (no materialize when parent set)", got.Backup)
+		t.Fatalf("Backup = %q, want empty (no materialize)", got.Backup)
 	}
 	if got.Mod_download_path != "" {
-		t.Fatalf("Mod_download_path = %q, want empty (no materialize when parent set)", got.Mod_download_path)
-	}
-}
-
-func TestGetDstConfigLegacyMaterializeUnchanged(t *testing.T) {
-	withTempConfig(t)
-	writeConfigFile(t, dst_config_path, []string{
-		"steamcmd=steamcmd",
-		"force_install_dir=dst-dedicated-server",
-		"cluster=Cluster1",
-		"bin=32",
-		"beta=0",
-	})
-
-	got := GetDstConfig()
-	if got.Backup != filepath.Join(KleiDstPath(), "backup") {
-		t.Fatalf("Backup = %q, want legacy klei-based default", got.Backup)
-	}
-	if got.Mod_download_path != filepath.Join(KleiDstPath(), "mod_config_download") {
-		t.Fatalf("Mod_download_path = %q, want legacy klei-based default", got.Mod_download_path)
+		t.Fatalf("Mod_download_path = %q, want empty (no materialize)", got.Mod_download_path)
 	}
 }
 

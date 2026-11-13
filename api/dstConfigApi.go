@@ -9,6 +9,7 @@ import (
 	"dst-admin-go/vo"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,12 @@ type DstConfigApi struct {
 
 var initEvnService = service.InitService{}
 
-// dstConfigResponse 原始配置 + 计算字段（§12 路径预览 / container_mode）
+// containerMode Docker 镜像内禁用导入等迁移功能
+func containerMode() bool {
+	return os.Getenv("DOCKER_CONTAINER") != ""
+}
+
+// dstConfigResponse 原始配置 + 计算字段（路径预览 / container_mode）
 type dstConfigResponse struct {
 	dstConfigUtils.DstConfig
 	Container_mode bool              `json:"container_mode"`

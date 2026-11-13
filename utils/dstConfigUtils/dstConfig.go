@@ -93,41 +93,33 @@ const (
 	DefaultWorlds    = "worlds"
 )
 
-// ExpandHome 把 ~ / ~/ / ~\ 前缀展开为用户主目录，其余原样返回
-func ExpandHome(p string) string {
-	if p == "~" {
-		if home, err := systemUtils.Home(); err == nil {
-			return home
-		}
-		return p
+// toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
+func toRel(p string) string {
+	p = strings.ReplaceAll(p, `\`, "/")
+	if i := strings.Index(p, ":"); i >= 0 {
+		p = p[i+1:]
 	}
-	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
-		if home, err := systemUtils.Home(); err == nil {
-			return filepath.Join(home, p[2:])
-		}
+	p = strings.TrimPrefix(p, "~")
+	p = strings.Trim(p, "/")
+	if p == "" {
+		return ""
 	}
-	return p
+	return filepath.FromSlash(p)
 }
 
-// ResolvePath 按 §8.3 判定顺序解析：空取默认 → ~ 展开 → 绝对原样 → parent 空原样 → 拼父级
+// ResolvePath 强制放在父级文件夹下（不兼容旧配置）：一切输入都当作相对子路径。
+// parent 为空视为未配置，返回空；空值取默认值 def。
 func ResolvePath(parent, p, def string) string {
-	// 空值取默认仅在 parent 模式下生效，legacy 空值保持为空（§2.7 逐字节兼容）
-	if p == "" && parent != "" {
+	if parent == "" {
+		return ""
+	}
+	if p == "" {
 		p = def
 	}
 	if p == "" {
 		return ""
 	}
-	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
-		return ExpandHome(p)
-	}
-	if filepath.IsAbs(p) {
-		return p
-	}
-	if parent == "" {
-		return p
-	}
-	return filepath.Join(parent, p)
+	return filepath.Join(parent, toRel(p))
 }
 
 func NewDstConfig() *DstConfig {
@@ -252,19 +244,7 @@ func GetDstConfig() DstConfig {
 	if dstConfig.Cluster == "" {
 		dstConfig.Cluster = "Cluster1"
 	}
-	// §8.1: 设置了 parent 时不物化绝对默认值（留空由 ResolvePath 供给），保证 GET 回显原始值
-	if dstConfig.Parent_path == "" {
-		if dstConfig.Backup == "" {
-			defaultPath := filepath.Join(KleiDstPath(), "backup")
-			fileUtils.CreateDirIfNotExists(defaultPath)
-			dstConfig.Backup = defaultPath
-		}
-		if dstConfig.Mod_download_path == "" {
-			defaultPath := filepath.Join(KleiDstPath(), "mod_config_download")
-			fileUtils.CreateDirIfNotExists(defaultPath)
-			dstConfig.Mod_download_path = defaultPath
-		}
-	}
+	// 不兼容旧配置：不做绝对默认值物化，空值由 ResolvePath 供给默认
 	if dstConfig.Bin == 0 {
 		dstConfig.Bin = 32
 	}
