@@ -3,6 +3,7 @@ package migration
 import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/systemUtils"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,6 +57,20 @@ func Scan(cfg dstConfigUtils.DstConfig, gameRunning bool) ([]MigrationUnit, erro
 	var units []MigrationUnit
 	claimed := map[string]bool{} // 已出单元的 Source（规范化）
 	junkNote := map[string]string{}
+	usedIDs := map[string]bool{}
+	uniqueID := func(id string) string {
+		if !usedIDs[id] {
+			usedIDs[id] = true
+			return id
+		}
+		for n := 2; ; n++ {
+			candidate := fmt.Sprintf("%s#%d", id, n)
+			if !usedIDs[candidate] {
+				usedIDs[candidate] = true
+				return candidate
+			}
+		}
+	}
 
 	for _, c := range cands {
 		entries, err := os.ReadDir(c.path)
@@ -85,7 +100,7 @@ func Scan(cfg dstConfigUtils.DstConfig, gameRunning bool) ([]MigrationUnit, erro
 				}
 				claimed[key] = true
 				clusterUnits = append(clusterUnits, MigrationUnit{
-					ID:        "worlds:" + name,
+					ID:        uniqueID("worlds:" + name),
 					Kind:      KindWorlds,
 					Source:    sub,
 					SourceLabel: c.label,
@@ -120,7 +135,7 @@ func Scan(cfg dstConfigUtils.DstConfig, gameRunning bool) ([]MigrationUnit, erro
 			target = target + "-beta"
 		}
 		u := MigrationUnit{
-			ID:          c.id,
+			ID:          uniqueID(c.id),
 			Kind:        c.kind,
 			Source:      src,
 			SourceLabel: c.label,

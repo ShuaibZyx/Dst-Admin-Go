@@ -328,7 +328,7 @@ func (b *BackupService) DeleteBackupSnapshots(prefix string, maxSnapshots int, c
 
 func (b *BackupService) backupPath() string {
 	dstConfig := dstConfigUtils.GetDstConfig()
-	backupPath := dstConfig.Backup
+	backupPath := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Backup, dstConfigUtils.DefaultBackup)
 	if !fileUtils.Exists(backupPath) {
 		log.Panicln("backup path is not exists")
 	}

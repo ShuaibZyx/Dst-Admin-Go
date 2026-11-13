@@ -180,7 +180,8 @@ func (m *ModApi) DeleteMod(ctx *gin.Context) {
 }
 
 func (m *ModApi) DeleteSetupWorkshop(ctx *gin.Context) {
-	dstPath := dstConfigUtils.GetDstConfig().Force_install_dir
+	cfg := dstConfigUtils.GetDstConfig()
+	dstPath := dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Force_install_dir, dstConfigUtils.DefaultServerDir)
 	modsPath := filepath.Join(dstPath, "mods")
 	// 删除所有workshop-xxx mod
 

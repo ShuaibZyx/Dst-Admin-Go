@@ -111,7 +111,8 @@ func ExpandHome(p string) string {
 
 // ResolvePath 按 §8.3 判定顺序解析：空取默认 → ~ 展开 → 绝对原样 → parent 空原样 → 拼父级
 func ResolvePath(parent, p, def string) string {
-	if p == "" {
+	// 空值取默认仅在 parent 模式下生效，legacy 空值保持为空（§2.7 逐字节兼容）
+	if p == "" && parent != "" {
 		p = def
 	}
 	if p == "" {

@@ -243,7 +243,7 @@ func UpdateModinfoList(lang string) {
 			modId := needUpdateList[i].Modid
 			// 删除之前的数据
 			dstConfig := dstConfigUtils.GetDstConfig()
-			mod_download_path := dstConfig.Mod_download_path
+			mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
 			mod_path := filepath.Join(mod_download_path, "/steamapps/workshop/content/322330/", modId)
 			_ = fileUtils.DeleteDir(mod_path)
 			_, _, _ = SubscribeModByModId(modId, lang)

@@ -41,6 +41,7 @@ func TestResolvePath(t *testing.T) {
 		{"home 前缀展开", `D:\DST`, "~/steamcmd", "steamcmd", filepath.Join(home, "steamcmd")},
 		{"空值取默认", `D:\DST`, "", "mod", filepath.Join(`D:\DST`, "mod")},
 		{"parent 空原样", "", "steamcmd", "steamcmd", "steamcmd"},
+		{"parent 空且值空不取默认", "", "", "mod", ""},
 		{"空值空默认", `D:\DST`, "", "", ""},
 		{"含空格父级", "/opt/dst parent", "mod", "mod", filepath.Join("/opt/dst parent", "mod")},
 	}

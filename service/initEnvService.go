@@ -2,7 +2,6 @@ package service
 
 import (
 	"dst-admin-go/config/global"
-	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
@@ -11,7 +10,6 @@ import (
 	"dst-admin-go/vo/level"
 	"log"
 	"path/filepath"
-	"runtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,10 +56,16 @@ func (i *InitService) InitDstEnv(initDst *InitDstData, ctx *gin.Context) {
 func (i *InitService) InitDstConfig(dstConfig *dstConfigUtils.DstConfig) {
 
 	if dstConfig.Backup == "" {
-		dstConfig.Backup = filepath.Join(dstUtils.GetKleiDstPath())
+		dstConfig.Backup = dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Backup, dstConfigUtils.DefaultBackup)
+		if dstConfig.Backup == "" {
+			dstConfig.Backup = filepath.Join(dstUtils.GetKleiDstPath())
+		}
 	}
 	if dstConfig.Mod_download_path == "" {
-		dstConfig.Mod_download_path = filepath.Join(dstUtils.GetKleiDstPath(), "mod_download")
+		dstConfig.Mod_download_path = dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
+		if dstConfig.Mod_download_path == "" {
+			dstConfig.Mod_download_path = filepath.Join(dstUtils.GetKleiDstPath(), "mod_download")
+		}
 		fileUtils.CreateDirIfNotExists(dstConfig.Mod_download_path)
 	}
 	dstConfigUtils.SaveDstConfig(dstConfig)
@@ -70,13 +74,8 @@ func (i *InitService) InitDstConfig(dstConfig *dstConfigUtils.DstConfig) {
 
 func (i *InitService) InitBaseLevel(dstConfig *dstConfigUtils.DstConfig, username, token string, exsitesNotInit bool) {
 	clusterName := dstConfig.Cluster
-	klei_path := ""
-	if runtime.GOOS == "windows" {
-		klei_path = filepath.Join(consts.HomePath, "Documents", "klei", "DoNotStarveTogether")
-	} else {
-		klei_path = filepath.Join(consts.HomePath, ".klei", "DoNotStarveTogether")
-	}
-	baseLevelPath := filepath.Join(klei_path, clusterName)
+	// 与 GetKleiDstPath 同源（含 parent/persistent_storage_root/BetaBranch），否则 parent 模式下新建世界会落错位置
+	baseLevelPath := filepath.Join(dstUtils.GetKleiDstPath(), clusterName)
 
 	if exsitesNotInit {
 		if fileUtils.Exists(baseLevelPath) {
@@ -85,8 +84,8 @@ func (i *InitService) InitBaseLevel(dstConfig *dstConfigUtils.DstConfig, usernam
 	}
 
 	fileUtils.CreateDirIfNotExists(baseLevelPath)
-	fileUtils.CreateDirIfNotExists(dstConfig.Backup)
-	fileUtils.CreateDirIfNotExists(dstConfig.Mod_download_path)
+	fileUtils.CreateDirIfNotExists(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Backup, dstConfigUtils.DefaultBackup))
+	fileUtils.CreateDirIfNotExists(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod))
 
 	log.Println(baseLevelPath)
 

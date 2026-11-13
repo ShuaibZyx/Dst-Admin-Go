@@ -214,6 +214,37 @@ func TestScanBetaSuffixServerTarget(t *testing.T) {
 	}
 }
 
+func TestScanUniqueIDs(t *testing.T) {
+	home := withTempHome(t)
+	// 两个 worlds 根都含同名 cluster → id 不得撞车
+	mkdirAll(t,
+		filepath.Join(kleiRootOf(home), "Alpha", "Master"),
+		filepath.Join(home, ".klei", "DoNotStarveTogetherBetaBranch", "Alpha", "Master"),
+	)
+	if runtime.GOOS == "windows" {
+		mkdirAll(t,
+			filepath.Join(home, "Documents", "klei", "DoNotStarveTogetherBetaBranch", "Alpha", "Master"),
+		)
+	}
+	last := t.TempDir()
+	mkdirAll(t, filepath.Join(last, "worlds", "DoNotStarveTogether", "Alpha", "Master"))
+
+	units, err := Scan(dstConfigUtils.DstConfig{
+		Parent_path:       t.TempDir(),
+		Last_parent_path:  last,
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, u := range units {
+		if seen[u.ID] {
+			t.Errorf("重复 ID: %s", u.ID)
+		}
+		seen[u.ID] = true
+	}
+}
+
 func TestDirSizeTopLevelFilesOnly(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, "sub"))
