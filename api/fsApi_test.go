@@ -48,3 +48,26 @@ func TestListDirsReturnsSubdirs(t *testing.T) {
 		t.Fatalf("dirs = %+v, want [alpha]", resp.Data.Dirs)
 	}
 }
+
+func TestListDirsEmptyPathUsesHome(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := gin.New()
+	fsApi := FsApi{}
+	app.GET("/api/fs/dirs", fsApi.ListDirs)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/fs/dirs?path=", nil)
+	app.ServeHTTP(w, req)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Path string `json:"path"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err, w.Body.String())
+	}
+	if resp.Code != 200 || resp.Data.Path == "" {
+		t.Fatalf("code=%d path=%q body=%s", resp.Code, resp.Data.Path, w.Body.String())
+	}
+}
