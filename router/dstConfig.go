@@ -17,6 +17,9 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 	importApi := api.ImportApi{}
 	router.POST("/api/dst/config/cluster/import", importApi.ImportCluster)
 
+	fsApi := api.FsApi{}
+	router.GET("/api/fs/dirs", fsApi.ListDirs)
+
 	kvApi := api.KvApi{}
 	kv := router.Group("/api/kv")
 	{
