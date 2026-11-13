@@ -61,6 +61,8 @@ type DstConfig struct {
 	Force_install_dir          string `json:"force_install_dir"`
 	DoNotStarveServerDirectory string `json:"donot_starve_server_directory"`
 	Cluster                    string `json:"cluster"`
+	Parent_path                string `json:"parent_path"`
+	Last_parent_path           string `json:"last_parent_path"`
 	Backup                     string `json:"backup"`
 	Mod_download_path          string `json:"mod_download_path"`
 	Bin                        int    `json:"bin"`
@@ -73,7 +75,7 @@ type DstConfig struct {
 	Conf_dir string `json:"conf_dir"`
 }
 
-const dst_config_path = "./dst_config"
+var dst_config_path = "./dst_config"
 
 func NewDstConfig() *DstConfig {
 	return &DstConfig{}
@@ -132,6 +134,20 @@ func GetDstConfig() DstConfig {
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
 				dstConfig.Cluster = strings.Replace(s, "\\n", "", -1)
+			}
+		}
+		if strings.HasPrefix(value, "parent_path=") {
+			split := strings.Split(value, "=")
+			if len(split) > 1 {
+				s := strings.TrimSpace(split[1])
+				dstConfig.Parent_path = strings.Replace(s, "\\n", "", -1)
+			}
+		}
+		if strings.HasPrefix(value, "last_parent_path=") {
+			split := strings.Split(value, "=")
+			if len(split) > 1 {
+				s := strings.TrimSpace(split[1])
+				dstConfig.Last_parent_path = strings.Replace(s, "\\n", "", -1)
 			}
 		}
 		if strings.Contains(value, "backup=") {
@@ -227,8 +243,16 @@ func SaveDstConfig(dstConfig *DstConfig) {
 	if dstConfig.Mod_download_path == "" {
 		dstConfig.Mod_download_path = oldDstConfig.Mod_download_path
 	}
+	// parent 变更且旧值非空时记录 last_parent_path；否则保留原值
+	if dstConfig.Parent_path != oldDstConfig.Parent_path && oldDstConfig.Parent_path != "" {
+		dstConfig.Last_parent_path = oldDstConfig.Parent_path
+	} else {
+		dstConfig.Last_parent_path = oldDstConfig.Last_parent_path
+	}
 
 	err := fileUtils.WriterLnFile(dst_config_path, []string{
+		"parent_path=" + dstConfig.Parent_path,
+		"last_parent_path=" + dstConfig.Last_parent_path,
 		"steamcmd=" + dstConfig.Steamcmd,
 		"force_install_dir=" + dstConfig.Force_install_dir,
 		"donot_starve_server_directory=" + dstConfig.DoNotStarveServerDirectory,
