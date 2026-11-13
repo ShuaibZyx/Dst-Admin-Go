@@ -77,6 +77,51 @@ type DstConfig struct {
 
 var dst_config_path = "./dst_config"
 
+// 相对路径默认值（§7），空值时参与 ResolvePath 判定
+const (
+	DefaultSteamcmd  = "steamcmd"
+	DefaultServerDir = "dst-dedicated-server"
+	DefaultBackup    = "backup"
+	DefaultMod       = "mod"
+	DefaultWorlds    = "worlds"
+)
+
+// ExpandHome 把 ~ / ~/ / ~\ 前缀展开为用户主目录，其余原样返回
+func ExpandHome(p string) string {
+	if p == "~" {
+		if home, err := systemUtils.Home(); err == nil {
+			return home
+		}
+		return p
+	}
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if home, err := systemUtils.Home(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// ResolvePath 按 §8.3 判定顺序解析：空取默认 → ~ 展开 → 绝对原样 → parent 空原样 → 拼父级
+func ResolvePath(parent, p, def string) string {
+	if p == "" {
+		p = def
+	}
+	if p == "" {
+		return ""
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		return ExpandHome(p)
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	if parent == "" {
+		return p
+	}
+	return filepath.Join(parent, p)
+}
+
 func NewDstConfig() *DstConfig {
 	return &DstConfig{}
 }
