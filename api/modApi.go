@@ -168,7 +168,7 @@ func (m *ModApi) DeleteMod(ctx *gin.Context) {
 	db.Where("modid = ?", modId).Delete(&model.ModInfo{})
 
 	dstConfig := dstConfigUtils.GetDstConfig()
-	mod_download_path := dstConfig.Mod_download_path
+	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
 	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", modId)
 	fileUtils.DeleteDir(mod_path)
 
@@ -247,7 +247,7 @@ func (m *ModApi) UpdateMod(ctx *gin.Context) {
 	db.Where("modid = ?", modId).Delete(&model.ModInfo{})
 
 	dstConfig := dstConfigUtils.GetDstConfig()
-	mod_download_path := dstConfig.Mod_download_path
+	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
 	mod_path := filepath.Join(mod_download_path, "/steamapps/workshop/content/322330/", modId)
 	fileUtils.DeleteDir(mod_path)
 

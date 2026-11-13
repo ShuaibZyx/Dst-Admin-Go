@@ -25,9 +25,9 @@ func (d *FileApi) UploadUgcMods(ctx *gin.Context) {
 	dstConfig := dstConfigUtils.GetDstConfig()
 	ugcModPath := ""
 	if dstConfig.Ugc_directory != "" {
-		ugcModPath = filepath.Join(dstConfig.Ugc_directory, "content", "322330")
+		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Ugc_directory, ""), "content", "322330")
 	} else {
-		ugcModPath = filepath.Join(dstConfig.Force_install_dir, "ugc_mods", dstConfig.Cluster, "Master", "content", "322330")
+		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods", dstConfig.Cluster, "Master", "content", "322330")
 	}
 
 	log.Println("上传ugc模组路径 ", ugcModPath)

@@ -103,7 +103,7 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 	// 检查 mod 文件是否已经存在
 	// mod_download_path := "/root/mine/dst/dst-admin-go-1.0.0/go-mod/mod"
 	dstConfig := dstConfigUtils.GetDstConfig()
-	mod_download_path := dstConfig.Mod_download_path
+	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
 	fileUtils.CreateFileIfNotExists(mod_download_path)
 	// 下载的模组位置
 	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", mod_id)
@@ -111,7 +111,7 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 		fmt.Println("Mod already downloaded to:", mod_path)
 	} else {
 		// 调用 SteamCMD 命令下载 mod(exec.Command 无 shell,防注入/含空格路径断裂;等待下载完成)
-		steamcmd := dstConfig.Steamcmd
+		steamcmd := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Steamcmd, dstConfigUtils.DefaultSteamcmd)
 		var exe string
 		if runtime.GOOS == "windows" {
 			exe = filepath.Join(steamcmd, "steamcmd.exe")

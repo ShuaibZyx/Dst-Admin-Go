@@ -46,7 +46,7 @@ func IsBeta() bool {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				beta, _ := strconv.ParseInt(strings.Replace(s, "\\n", "", -1), 10, 64)
+				beta, _ := strconv.ParseInt(s, 10, 64)
 				if beta == 1 {
 					return true
 				}
@@ -76,6 +76,13 @@ type DstConfig struct {
 }
 
 var dst_config_path = "./dst_config"
+
+// SetDstConfigPathForTest 供跨包测试替换配置文件路径，返回恢复函数
+func SetDstConfigPathForTest(p string) func() {
+	old := dst_config_path
+	dst_config_path = p
+	return func() { dst_config_path = old }
+}
 
 // 相对路径默认值（§7），空值时参与 ResolvePath 判定
 const (
@@ -150,70 +157,70 @@ func GetDstConfig() DstConfig {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Steamcmd = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Steamcmd = s
 			}
 		}
 		if strings.Contains(value, "force_install_dir=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Force_install_dir = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Force_install_dir = s
 			}
 		}
 		if strings.Contains(value, "donot_starve_server_directory=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.DoNotStarveServerDirectory = strings.Replace(s, "\\n", "", -1)
+				dstConfig.DoNotStarveServerDirectory = s
 			}
 		}
 		if strings.Contains(value, "persistent_storage_root=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Persistent_storage_root = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Persistent_storage_root = s
 			}
 		}
 		if strings.Contains(value, "cluster=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Cluster = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Cluster = s
 			}
 		}
 		if strings.HasPrefix(value, "parent_path=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Parent_path = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Parent_path = s
 			}
 		}
 		if strings.HasPrefix(value, "last_parent_path=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Last_parent_path = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Last_parent_path = s
 			}
 		}
 		if strings.Contains(value, "backup=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Backup = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Backup = s
 			}
 		}
 		if strings.Contains(value, "mod_download_path=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Mod_download_path = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Mod_download_path = s
 			}
 		}
 		if strings.Contains(value, "bin=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				bin, _ := strconv.ParseInt(strings.Replace(s, "\\n", "", -1), 10, 64)
+				bin, _ := strconv.ParseInt(s, 10, 64)
 				dstConfig.Bin = int(bin)
 			}
 		}
@@ -221,7 +228,7 @@ func GetDstConfig() DstConfig {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				beta, _ := strconv.ParseInt(strings.Replace(s, "\\n", "", -1), 10, 64)
+				beta, _ := strconv.ParseInt(s, 10, 64)
 				dstConfig.Beta = int(beta)
 			}
 		}
@@ -229,14 +236,14 @@ func GetDstConfig() DstConfig {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Ugc_directory = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Ugc_directory = s
 			}
 		}
 		if strings.Contains(value, "conf_dir=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
-				dstConfig.Conf_dir = strings.Replace(s, "\\n", "", -1)
+				dstConfig.Conf_dir = s
 			}
 		}
 	}
@@ -244,15 +251,18 @@ func GetDstConfig() DstConfig {
 	if dstConfig.Cluster == "" {
 		dstConfig.Cluster = "Cluster1"
 	}
-	if dstConfig.Backup == "" {
-		defaultPath := filepath.Join(KleiDstPath(), "backup")
-		fileUtils.CreateDirIfNotExists(defaultPath)
-		dstConfig.Backup = defaultPath
-	}
-	if dstConfig.Mod_download_path == "" {
-		defaultPath := filepath.Join(KleiDstPath(), "mod_config_download")
-		fileUtils.CreateDirIfNotExists(defaultPath)
-		dstConfig.Mod_download_path = defaultPath
+	// §8.1: 设置了 parent 时不物化绝对默认值（留空由 ResolvePath 供给），保证 GET 回显原始值
+	if dstConfig.Parent_path == "" {
+		if dstConfig.Backup == "" {
+			defaultPath := filepath.Join(KleiDstPath(), "backup")
+			fileUtils.CreateDirIfNotExists(defaultPath)
+			dstConfig.Backup = defaultPath
+		}
+		if dstConfig.Mod_download_path == "" {
+			defaultPath := filepath.Join(KleiDstPath(), "mod_config_download")
+			fileUtils.CreateDirIfNotExists(defaultPath)
+			dstConfig.Mod_download_path = defaultPath
+		}
 	}
 	if dstConfig.Bin == 0 {
 		dstConfig.Bin = 32

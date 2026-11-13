@@ -14,34 +14,31 @@ import (
 )
 
 func GetCluster(clusterName string) *model.Cluster {
-	config := dstConfigUtils.GetDstConfig()
-	cluster := model.Cluster{
-		SteamCmd:                config.Steamcmd,
-		ForceInstallDir:         config.Force_install_dir,
-		ClusterName:             config.Cluster,
-		Backup:                  config.Backup,
-		ModDownloadPath:         config.Mod_download_path,
-		Bin:                     config.Bin,
-		Beta:                    config.Beta,
-		Ugc_directory:           config.Ugc_directory,
-		Persistent_storage_root: config.Persistent_storage_root,
-		Conf_dir:                config.Conf_dir,
-	}
-	return &cluster
+	return toCluster(dstConfigUtils.GetDstConfig())
 }
 
 func GetClusterFromGin(ctx *gin.Context) *model.Cluster {
-	config := dstConfigUtils.GetDstConfig()
+	return toCluster(dstConfigUtils.GetDstConfig())
+}
+
+// toCluster 把 dst_config 解析成绝对路径后的集群视图（§8 读取边界）
+func toCluster(config dstConfigUtils.DstConfig) *model.Cluster {
+	parent := config.Parent_path
+	// 存档根：仅 parent 模式下空值取 DefaultWorlds；legacy 空值保持为空（继续走 Klei 默认）
+	persistent := config.Persistent_storage_root
+	if parent != "" {
+		persistent = dstConfigUtils.ResolvePath(parent, persistent, dstConfigUtils.DefaultWorlds)
+	}
 	cluster := model.Cluster{
-		SteamCmd:                config.Steamcmd,
-		ForceInstallDir:         config.Force_install_dir,
+		SteamCmd:                dstConfigUtils.ResolvePath(parent, config.Steamcmd, dstConfigUtils.DefaultSteamcmd),
+		ForceInstallDir:         dstConfigUtils.ResolvePath(parent, config.Force_install_dir, dstConfigUtils.DefaultServerDir),
 		ClusterName:             config.Cluster,
-		Backup:                  config.Backup,
-		ModDownloadPath:         config.Mod_download_path,
+		Backup:                  dstConfigUtils.ResolvePath(parent, config.Backup, dstConfigUtils.DefaultBackup),
+		ModDownloadPath:         dstConfigUtils.ResolvePath(parent, config.Mod_download_path, dstConfigUtils.DefaultMod),
 		Bin:                     config.Bin,
 		Beta:                    config.Beta,
 		Ugc_directory:           config.Ugc_directory,
-		Persistent_storage_root: config.Persistent_storage_root,
+		Persistent_storage_root: persistent,
 		Conf_dir:                config.Conf_dir,
 	}
 	return &cluster

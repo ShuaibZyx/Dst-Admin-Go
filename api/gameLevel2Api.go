@@ -165,7 +165,7 @@ func startBefore(ctx *gin.Context) {
 func copyOsFile() {
 	config := dstConfigUtils.GetDstConfig()
 	// 定义路径
-	srcFile := filepath.Join(config.Steamcmd, "linux32", "steamclient.so")
+	srcFile := filepath.Join(dstConfigUtils.ResolvePath(config.Parent_path, config.Steamcmd, dstConfigUtils.DefaultSteamcmd), "linux32", "steamclient.so")
 	dstDir := filepath.Join(config.Force_install_dir, "bin", "lib32")
 	dstFile := filepath.Join(dstDir, "steamclient.so")
 	backupFile := filepath.Join(dstDir, "steamclient.so.bak")

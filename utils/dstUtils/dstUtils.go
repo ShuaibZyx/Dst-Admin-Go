@@ -25,7 +25,7 @@ func GetUgcWorkshopModPath(clusterName, levelName, workshopId string) string {
 	if dstConfig.Ugc_directory != "" {
 		workshopModPath = filepath.Join(GetUgcModPath(), "content", "322330", workshopId)
 	} else {
-		workshopModPath = filepath.Join(dstConfig.Force_install_dir, "ugc_mods", clusterName, levelName, "content", "322330", workshopId)
+		workshopModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods", clusterName, levelName, "content", "322330", workshopId)
 	}
 	return workshopModPath
 }
@@ -34,9 +34,9 @@ func GetUgcModPath() string {
 	dstConfig := dstConfigUtils.GetDstConfig()
 	ugcModPath := ""
 	if dstConfig.Ugc_directory != "" {
-		ugcModPath = dstConfig.Ugc_directory
+		ugcModPath = dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Ugc_directory, "")
 	} else {
-		ugcModPath = filepath.Join(dstConfig.Force_install_dir, "ugc_mods")
+		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods")
 	}
 	return ugcModPath
 }
@@ -57,12 +57,20 @@ func GetKleiDstPath() string {
 	dstConfig := dstConfigUtils.GetDstConfig()
 	confDir := dstConfig.Conf_dir
 	persistentStorageRoot := dstConfig.Persistent_storage_root
+	if dstConfig.Parent_path != "" {
+		persistentStorageRoot = dstConfigUtils.ResolvePath(dstConfig.Parent_path, persistentStorageRoot, dstConfigUtils.DefaultWorlds)
+	}
 	kleiDstPath := ""
 	if persistentStorageRoot == "" {
 		kleiDstPath = dstConfigUtils.KleiDstPath()
 	} else {
 		if confDir == "" {
-			confDir = "DoNotStarveTogether"
+			// §9: 与 beta=1 的存档目录命名保持一致
+			if dstConfig.Beta == 1 {
+				confDir = "DoNotStarveTogetherBetaBranch"
+			} else {
+				confDir = "DoNotStarveTogether"
+			}
 		}
 		kleiDstPath = filepath.Join(persistentStorageRoot, confDir)
 	}
