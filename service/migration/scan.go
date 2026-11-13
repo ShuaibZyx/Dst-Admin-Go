@@ -58,6 +58,7 @@ func Scan(cfg dstConfigUtils.DstConfig, gameRunning bool) ([]MigrationUnit, erro
 	claimed := map[string]bool{} // 已出单元的 Source（规范化）
 	junkNote := map[string]string{}
 	usedIDs := map[string]bool{}
+	takenTargets := map[string]bool{}
 	uniqueID := func(id string) string {
 		if !usedIDs[id] {
 			usedIDs[id] = true
@@ -133,6 +134,17 @@ func Scan(cfg dstConfigUtils.DstConfig, gameRunning bool) ([]MigrationUnit, erro
 		target := filepath.Join(parent, defaultRel(c.kind))
 		if c.kind == KindServer && cfg.Beta == 1 {
 			target = target + "-beta"
+		}
+		// 同类多位置：首个存在的源占默认目标，其余落到 <默认目标>/<basename>（模组等多位置）
+		if dirExists(src) {
+			if takenTargets[cleanKey(target)] {
+				extra := filepath.Join(target, filepath.Base(src))
+				for n := 2; takenTargets[cleanKey(extra)]; n++ {
+					extra = filepath.Join(target, fmt.Sprintf("%s-%d", filepath.Base(src), n))
+				}
+				target = extra
+			}
+			takenTargets[cleanKey(target)] = true
 		}
 		u := MigrationUnit{
 			ID:          uniqueID(c.id),
@@ -222,6 +234,9 @@ func collectCandidates(cfg dstConfigUtils.DstConfig, home string) []scanCandidat
 		id := kind + ":legacy:" + filepath.Base(root)
 		cands = append(cands, scanCandidate{kind: kind, path: root, label: LabelLegacyDefault, id: id})
 	}
+
+	// 2.5 名字/特征发现（含 Documents/Klei/steamcmd 等内嵌布局）
+	cands = append(cands, DiscoverCandidates(DiscoveryRoots(home))...)
 
 	// 3. 上次父级文件夹的默认子目录（存在的）
 	if cfg.Last_parent_path != "" {

@@ -12,9 +12,15 @@ import (
 func withTempHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	old := homeDir
+	oldHome := homeDir
+	oldRoots := DiscoveryRoots
 	homeDir = func() (string, error) { return home, nil }
-	t.Cleanup(func() { homeDir = old })
+	// 发现根限定在临时 home，避免测试扫到真实机器
+	DiscoveryRoots = func(h string) []string { return []string{h, filepath.Join(h, "Documents")} }
+	t.Cleanup(func() {
+		homeDir = oldHome
+		DiscoveryRoots = oldRoots
+	})
 	return home
 }
 
@@ -139,11 +145,20 @@ func TestScanTargetConflictAndInPlace(t *testing.T) {
 	// 当前配置 steamcmd 默认相对值 → 源=目标 → already_in_place
 	mkdirAll(t, filepath.Join(parent, "steamcmd"))
 	writeFileAt(t, filepath.Join(parent, "steamcmd", "steamcmd.exe"), "x")
-	// legacy server 源 home/dst，目标已存在非空 → target_conflict
-	mkdirAll(t, filepath.Join(home, "dst"), filepath.Join(parent, "dst-dedicated-server"))
-	writeFileAt(t, filepath.Join(parent, "dst-dedicated-server", "f"), "x")
+	// 模组多位置：配置项占主目标 <parent>/mod；发现的第二位置 → <parent>/mod/steamapps（已被非空占用）→ target_conflict
+	klei := filepath.Join(home, "Documents", "klei")
+	mkdirAll(t,
+		filepath.Join(klei, "steamcmd", "steamapps", "workshop"),
+		filepath.Join(klei, "DoNotStarveTogether", "mod_config_download"),
+		filepath.Join(parent, "mod", "steamapps"),
+	)
+	writeFileAt(t, filepath.Join(klei, "steamcmd", "steamcmd.exe"), "x")
+	writeFileAt(t, filepath.Join(parent, "mod", "steamapps", "f"), "x")
 
-	units, err := Scan(dstConfigUtils.DstConfig{Parent_path: parent}, false)
+	units, err := Scan(dstConfigUtils.DstConfig{
+		Parent_path:       parent,
+		Mod_download_path: filepath.Join(klei, "DoNotStarveTogether", "mod_config_download"),
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,9 +166,9 @@ func TestScanTargetConflictAndInPlace(t *testing.T) {
 	if s == nil || s.Status != StatusAlreadyInPlace {
 		t.Errorf("steamcmd 状态 = %+v, want already_in_place", s)
 	}
-	srv := findUnit(units, KindServer, "dst")
-	if srv == nil || srv.Status != StatusTargetConflict {
-		t.Errorf("server 状态 = %+v, want target_conflict", srv)
+	m := findUnit(units, KindMod, filepath.Join("steamcmd", "steamapps"))
+	if m == nil || m.Status != StatusTargetConflict {
+		t.Errorf("mod steamapps 状态 = %+v, want target_conflict", m)
 	}
 }
 
@@ -242,6 +257,89 @@ func TestScanUniqueIDs(t *testing.T) {
 			t.Errorf("重复 ID: %s", u.ID)
 		}
 		seen[u.ID] = true
+	}
+}
+
+func fixtureKleiNested(t *testing.T, home string) string {
+	t.Helper()
+	klei := filepath.Join(home, "Documents", "klei")
+	mkdirAll(t,
+		filepath.Join(klei, "steamcmd", "steamapps", "workshop", "content", "322330"),
+		filepath.Join(klei, "DoNotStarveTogether", "mod_config_download"),
+		filepath.Join(klei, "DoNotStarveTogether", "backup"),
+		filepath.Join(klei, "DoNotStarveTogether", "Alpha", "Master"),
+	)
+	writeFileAt(t, filepath.Join(klei, "steamcmd", "steamcmd.exe"), "x")
+	return klei
+}
+
+func TestDiscoverFindsKleiNestedLayout(t *testing.T) {
+	home := withTempHome(t)
+	klei := fixtureKleiNested(t, home)
+
+	cands := DiscoverCandidates([]string{home, filepath.Join(home, "Documents")})
+	kinds := map[string]string{}
+	for _, c := range cands {
+		kinds[c.kind+"|"+filepath.Base(c.path)] = c.path
+	}
+	if p, ok := kinds["steamcmd|steamcmd"]; !ok || !strings.HasPrefix(p, filepath.Join(klei, "steamcmd")) {
+		t.Errorf("未发现 Klei 内嵌 steamcmd: %v", kinds)
+	}
+	if _, ok := kinds["mod|steamapps"]; !ok {
+		t.Errorf("未发现 steamcmd workshop 缓存: %v", kinds)
+	}
+	if _, ok := kinds["mod|mod_config_download"]; !ok {
+		t.Errorf("未发现 mod_config_download: %v", kinds)
+	}
+	if _, ok := kinds["backup|backup"]; !ok {
+		t.Errorf("未发现 Klei 内嵌 backup: %v", kinds)
+	}
+}
+
+func TestClassifyBySignature(t *testing.T) {
+	base := t.TempDir()
+	sc := filepath.Join(base, "whatever")
+	mkdirAll(t, sc)
+	writeFileAt(t, filepath.Join(sc, "steamcmd.exe"), "x")
+	if k := ClassifyBySignature(sc); k != KindSteamcmd {
+		t.Errorf("steamcmd.exe → %q, want steamcmd", k)
+	}
+	srv := filepath.Join(base, "whatever2")
+	mkdirAll(t, filepath.Join(srv, "bin64"))
+	writeFileAt(t, filepath.Join(srv, "bin64", "dontstarve_dedicated_server_nullrenderer_x64.exe"), "x")
+	if k := ClassifyBySignature(srv); k != KindServer {
+		t.Errorf("nullrenderer → %q, want server", k)
+	}
+	mod := filepath.Join(base, "whatever3")
+	mkdirAll(t, filepath.Join(mod, "steamapps", "workshop"))
+	if k := ClassifyBySignature(mod); k != KindMod {
+		t.Errorf("steamapps/workshop → %q, want mod", k)
+	}
+}
+
+func TestScanModUnitsGetDistinctTargets(t *testing.T) {
+	home := withTempHome(t)
+	fixtureKleiNested(t, home)
+
+	units, err := Scan(dstConfigUtils.DstConfig{
+		Parent_path:       t.TempDir(),
+		Mod_download_path: filepath.Join(home, "Documents", "klei", "DoNotStarveTogether", "mod_config_download"),
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets := map[string]bool{}
+	for _, u := range units {
+		if u.Kind != KindMod {
+			continue
+		}
+		if targets[u.Target] {
+			t.Errorf("mod 目标重复: %s", u.Target)
+		}
+		targets[u.Target] = true
+	}
+	if len(targets) < 2 {
+		t.Errorf("mod 单元数 = %d, want ≥2（多模组位置）", len(targets))
 	}
 }
 
