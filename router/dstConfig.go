@@ -12,6 +12,7 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 	{
 		dstConfig.GET("", dstConfigApi.GetDstConfig)
 		dstConfig.POST("", dstConfigApi.SaveDstConfig)
+		dstConfig.GET("/clusters", dstConfigApi.GetClusters)
 	}
 
 	fsApi := api.FsApi{}

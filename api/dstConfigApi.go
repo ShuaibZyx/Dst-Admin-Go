@@ -75,3 +75,36 @@ func (d *DstConfigApi) SaveDstConfig(ctx *gin.Context) {
 		Data: nil,
 	})
 }
+
+// GetClusters 列出存档目录下的所有存档（cluster）及当前存档
+func (d *DstConfigApi) GetClusters(ctx *gin.Context) {
+	cfg := dstConfigUtils.GetDstConfig()
+	base := dstUtils.GetKleiDstPath()
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"clusters": []string{}, "current": cfg.Cluster}})
+		return
+	}
+	clusters := []string{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sub := filepath.Join(base, e.Name())
+		subs, err := os.ReadDir(sub)
+		if err != nil {
+			continue
+		}
+		isCluster := false
+		for _, s := range subs {
+			if s.Name() == "cluster.ini" || (s.IsDir() && (s.Name() == "Master" || s.Name() == "Caves")) {
+				isCluster = true
+				break
+			}
+		}
+		if isCluster {
+			clusters = append(clusters, e.Name())
+		}
+	}
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"clusters": clusters, "current": cfg.Cluster}})
+}
