@@ -102,7 +102,7 @@ func TestGetClusterUnifiedUgcDir(t *testing.T) {
 		t.Fatalf("Ugc_directory = %q, want %q", c.Ugc_directory, want)
 	}
 
-	// 显式配置 → 尊重用户值（相对则拼父级）
+	// 即使残留 ugc_directory 配置也忽略——统一用一处
 	writeTempDstConfig(t, []string{
 		"parent_path=/data/dst",
 		"mod_download_path=mod",
@@ -111,7 +111,7 @@ func TestGetClusterUnifiedUgcDir(t *testing.T) {
 		"beta=0",
 	})
 	c = GetCluster("Cluster1")
-	if c.Ugc_directory != filepath.Join("/data/dst", "myugc") {
-		t.Fatalf("Ugc_directory = %q, want /data/dst/myugc", c.Ugc_directory)
+	if c.Ugc_directory != want {
+		t.Fatalf("Ugc_directory = %q, want 统一目录 %q", c.Ugc_directory, want)
 	}
 }

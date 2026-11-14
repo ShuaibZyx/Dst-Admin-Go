@@ -106,12 +106,9 @@ func SaveDirOf(cfg DstConfig) string {
 }
 
 // UnifiedUgcDir 游戏与面板共用的模组目录（-ugc_directory 参数值）：
-// 显式配置优先；留空且 parent 模式时统一到模组下载目录的 steamapps/workshop 布局
-// （与 SteamCMD 下载缓存完全一致，同一份文件两处共用）；legacy 留空则返回空（游戏默认 ugc_mods）。
+// 一律统一到模组下载目录的 steamapps/workshop 布局（与 SteamCMD 下载缓存完全一致，同一份文件两处共用）；
+// legacy（无父级）返回空（游戏默认 ugc_mods）。不做自定义，统一用一处。
 func UnifiedUgcDir(cfg DstConfig) string {
-	if cfg.Ugc_directory != "" {
-		return ResolvePath(cfg.Parent_path, cfg.Ugc_directory, "")
-	}
 	if cfg.Parent_path == "" {
 		return ""
 	}
