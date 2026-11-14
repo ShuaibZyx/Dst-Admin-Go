@@ -227,6 +227,7 @@ func (g *GameLevel2Api) Start(ctx *gin.Context) {
 
 	// 闸门:海难/火山世界须已订阅 IA 模组才能拉起
 	if err := mod.CheckIAWorldStart(clusterName, levelName); err != nil {
+		service.StartLog.Logf("启动被拒 %s/%s: %s", clusterName, levelName, err)
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
@@ -272,6 +273,7 @@ func (g *GameLevel2Api) StartAll(ctx *gin.Context) {
 	// 闸门:任一 IA 世界未订阅 IA 模组则拒绝一键启动（与单世界启动一致）
 	for _, w := range gameLevel2Service.GetLevelList(clusterName) {
 		if err := mod.CheckIAWorldStart(clusterName, w.Uuid); err != nil {
+			service.StartLog.Logf("一键启动被拒 %s/%s: %s", clusterName, w.Uuid, err)
 			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 			return
 		}

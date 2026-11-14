@@ -9,6 +9,7 @@ func InitGameRouter(router *gin.RouterGroup) {
 
 	gameConsoleApi := api.GameConsoleApi{}
 	updateApi := api.GameUpdateApi{}
+	startLogApi := api.StartLogApi{}
 	gameConsole := router.Group("/api/game")
 	{
 		gameConsole.GET("/sent/broadcast", gameConsoleApi.SentBroadcast)
@@ -51,6 +52,7 @@ func InitGameRouter(router *gin.RouterGroup) {
 	game := router.Group("/api/game")
 	{
 		game.GET("/update", updateApi.UpdateGame)
+	game.GET("/startlog", startLogApi.Stream)
 		game.GET("/system/info", gameApi.GetSystemInfo)
 		game.GET("/system/info/stream", gameApi.SystemInfoStream)
 		game.GET("/log/stream", gameApi.LogStream)

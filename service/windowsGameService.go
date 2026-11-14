@@ -103,10 +103,11 @@ func (g *WindowsGameService) killLevel(clusterName, level string) {
 
 func (g *WindowsGameService) LaunchLevel(clusterName, level string, bin, beta int) {
 	// 启动前同步下载该存档所需模组（已存在跳过）
-	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { log.Println("[模组]", s) }); err != nil {
-		log.Println("[模组] 下载失败:", err)
+	StartLog.Logf("启动 %s/%s (bin=%d beta=%d)", clusterName, level, bin, beta)
+	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { StartLog.Logf("[模组] %s", s) }); err != nil {
+		StartLog.Logf("[模组] 下载失败: %s", err)
 	} else if n > 0 {
-		log.Println("[模组] 本次同步下载", n, "个")
+		StartLog.Logf("[模组] 本次同步下载 %d 个", n)
 	}
 
 
