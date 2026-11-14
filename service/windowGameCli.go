@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -63,23 +64,88 @@ func (receiver *ClusterContainer) Send(cluster, levelName, message string) {
 	}
 }
 
+// matchLevelCmdline 判断进程命令行是否为 (cluster, level) 的游戏世界
+func matchLevelCmdline(cmdline []string, cluster, level string) bool {
+	if len(cmdline) == 0 {
+		return false
+	}
+	base := strings.ToLower(filepath.Base(cmdline[0]))
+	if !strings.Contains(base, "dontstarve_dedicated_server") {
+		return false
+	}
+	joined := strings.Join(cmdline, " ")
+	return strings.Contains(joined, "-cluster "+cluster) && strings.Contains(joined, "-shard "+level)
+}
+
+// findLevelPid 扫描真实进程找回世界 pid（面板重启后或外部启动的场景）
+func findLevelPid(cluster, level string) int32 {
+	procs, err := process.Processes()
+	if err != nil {
+		return 0
+	}
+	for _, p := range procs {
+		cl, err := p.CmdlineSlice()
+		if err != nil {
+			continue
+		}
+		if matchLevelCmdline(cl, cluster, level) {
+			return p.Pid
+		}
+	}
+	return 0
+}
+
+func memByPid(pid int32) float64 {
+	if pid <= 0 {
+		return 0
+	}
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return 0
+	}
+	memInfo, err := p.MemoryInfo()
+	if err != nil {
+		return 0
+	}
+	return float64(memInfo.RSS) / (1024 * 1024)
+}
+
+func cpuByPid(pid int32) float64 {
+	if pid <= 0 {
+		return 0
+	}
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return 0
+	}
+	percent, err := p.Percent(time.Second)
+	if err != nil {
+		return 0
+	}
+	return percent
+}
+
 func (receiver *ClusterContainer) Status(cluster, levelName string) bool {
 	value := receiver.get(cluster, levelName)
-	return value != nil && value.Status()
+	if value != nil && value.Status() {
+		return true
+	}
+	// 面板重启/外部启动：按真实进程判定
+	return findLevelPid(cluster, levelName) > 0
 }
 
 func (receiver *ClusterContainer) MemUsage(cluster, levelName string) float64 {
 	if value := receiver.get(cluster, levelName); value != nil {
 		return value.GetProcessMemInfo()
 	}
-	return 0
+	return memByPid(findLevelPid(cluster, levelName))
 }
 
 func (receiver *ClusterContainer) CpuUsage(cluster, levelName string) float64 {
 	if value := receiver.get(cluster, levelName); value != nil {
 		return value.GetProcessCpuInfo()
 	}
-	return 0
+	return cpuByPid(findLevelPid(cluster, levelName))
 }
 
 // Kill 强杀游戏进程（B15：游戏卡死不响应 c_shutdown 时使用）
