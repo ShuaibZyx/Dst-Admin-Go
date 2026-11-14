@@ -216,7 +216,14 @@ func SyncMods(clusterName, mode string, progress func(string)) (string, error) {
 		}
 	}
 	ids := ClusterModIDs(clusterName)
-	report("校验 %d 个模组...", len(ids))
+	if len(ids) == 0 {
+		return "", fmt.Errorf("未在存档中找到任何模组登记（modoverrides），无法执行")
+	}
+	if mode == "redownload" {
+		report("执行模式：全部重新下载（先删后下），共 %d 个模组", len(ids))
+	} else {
+		report("执行模式：校验更新，共 %d 个模组", len(ids))
+	}
 	statuses := VerifyClusterMods(clusterName)
 	ok, missing, broken := 0, 0, 0
 	var needFix []string
@@ -244,7 +251,7 @@ func SyncMods(clusterName, mode string, progress func(string)) (string, error) {
 		report("校验完成：%d 个模组全部完整，无需下载", ok)
 		report("刷新模组信息...")
 		UpdateModinfoList("zh")
-		return fmt.Sprintf("完成：校验 %d 个模组全部完整", len(statuses)), nil
+		return fmt.Sprintf("完成：校验 %d 个模组全部完整，成功 0，失败 0", len(statuses)), nil
 	} else {
 		report("修复 %d 个问题模组...", len(target))
 	}
@@ -261,5 +268,8 @@ func SyncMods(clusterName, mode string, progress func(string)) (string, error) {
 	report("刷新模组信息...")
 	UpdateModinfoList("zh")
 	report("模组信息已更新")
-	return fmt.Sprintf("完成：校验 %d，成功 %d，失败 %d", len(statuses), n, failed), nil
+	if failed > 0 {
+		return fmt.Sprintf("失败：校验 %d，成功 %d，失败 %d", len(statuses), n, failed), nil
+	}
+	return fmt.Sprintf("完成：校验 %d，成功 %d，失败 0", len(statuses), n), nil
 }
