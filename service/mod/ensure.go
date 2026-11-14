@@ -1,14 +1,18 @@
 package mod
 
 import (
+	"bufio"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
+	"time"
 )
 
 // ClusterModIDs 收集指定存档所有世界 modoverrides 中引用的模组 ID（去重）
@@ -62,13 +66,10 @@ func DownloadModToUnified(modid string, progress func(string)) error {
 		return errors.New("未安装 SteamCMD，请先在系统设置使用「一键下载系统组件」")
 	}
 	report("下载模组 " + modid + " ...")
-	cmd := exec.Command(exe, "+login", "anonymous", "+workshop_download_item", "322330", modid, "+quit")
-	cmd.Dir = steamcmdDir
-	out, err := cmd.CombinedOutput()
+	err := RunSteamcmdStream(steamcmdDir, []string{"+login", "anonymous", "+workshop_download_item", "322330", modid, "+quit"}, report)
 	if err != nil {
 		return errors.New("模组 " + modid + " 下载失败: " + err.Error())
 	}
-	_ = out
 	src := filepath.Join(steamcmdDir, "steamapps", "workshop", "content", "322330", modid)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return errors.New("模组 " + modid + " 下载后未找到文件")
@@ -98,6 +99,47 @@ func EnsureClusterMods(clusterName string, progress func(string)) (int, error) {
 		n++
 	}
 	return n, nil
+}
+
+// RunSteamcmdStream 运行 steamcmd 并把输出行实时回调（相同行与高频行节流，关键行必发）
+func RunSteamcmdStream(dir string, args []string, send func(string)) error {
+	exe := steamcmdExePath(dir)
+	cmd := exec.Command(exe, args...)
+	cmd.Dir = dir
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	last := ""
+	lastAt := time.Time{}
+	scanner := bufio.NewScanner(pr)
+	for scanner.Scan() {
+		line := strings.TrimSpace(strings.TrimSuffix(scanner.Text(), ""))
+		if line == "" {
+			continue
+		}
+		key := line
+		if len(key) > 120 {
+			key = key[:120]
+		}
+		if key == last {
+			continue
+		}
+		isKey := strings.Contains(line, "Success") || strings.Contains(line, "ERROR") ||
+			strings.Contains(line, "error") || strings.Contains(line, "失败") || strings.Contains(line, "完成")
+		if !isKey && time.Since(lastAt) < 700*time.Millisecond {
+			continue
+		}
+		last = key
+		lastAt = time.Now()
+		if send != nil {
+			send(line)
+		}
+	}
+	_ = pw.Close()
+	return cmd.Wait()
 }
 
 func steamcmdExePath(dir string) string {

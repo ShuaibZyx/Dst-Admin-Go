@@ -2,6 +2,7 @@ package api
 
 import (
 	"archive/zip"
+	mod2 "dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"fmt"
 	"io"
@@ -93,15 +94,10 @@ func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir st
 		betaArgs = append(betaArgs, "-beta", "updatebeta")
 	}
 	betaArgs = append(betaArgs, "validate", "+quit")
-	cmd := exec.Command(steamcmdExe, betaArgs...)
-	cmd.Dir = steamcmdDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
+	if err := mod2.RunSteamcmdStream(steamcmdDir, betaArgs, send); err != nil {
 		send("[失败] 服务器下载失败: " + err.Error())
-		send(tailLines(string(out), 8))
 		return
 	}
-	send(tailLines(string(out), 4))
 	send("完成！SteamCMD、专用服务器、模组目录已就绪。")
 }
 
