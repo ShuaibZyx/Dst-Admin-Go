@@ -68,15 +68,8 @@ func get_dst_ucgs_mods_installed_path(modid string) (string, bool) {
 	// 先从 mods 文件读取
 
 	dstConfig := dstConfigUtils.GetDstConfig()
-	masterModFilePath := ""
-	caveModFilePath := ""
-	if dstConfig.Ugc_directory != "" {
-		masterModFilePath = filepath.Join(dstUtils.GetUgcModPath(), "content", "322330", modid)
-		caveModFilePath = filepath.Join(dstUtils.GetUgcModPath(), "content", "322330", modid)
-	} else {
-		masterModFilePath = filepath.Join(dstConfig.Force_install_dir, "ugc_mods", dstConfig.Cluster, "Master", "content", "322330", modid)
-		caveModFilePath = filepath.Join(dstConfig.Force_install_dir, "ugc_mods", dstConfig.Cluster, "Caves", "content", "322330", modid)
-	}
+	masterModFilePath := dstUtils.GetUgcWorkshopModPath(dstConfig.Cluster, "Master", modid)
+	caveModFilePath := dstUtils.GetUgcWorkshopModPath(dstConfig.Cluster, "Caves", modid)
 
 	log.Println("masterModFilePath: ", masterModFilePath)
 	log.Println("caveModFilePath: ", caveModFilePath)
@@ -322,32 +315,47 @@ func SearchModList(text string, page int, num int, lang string) (map[string]inte
 	} else {
 		data.Set("language", "")
 	}
-	urlStr = urlStr + "?" + data.Encode()
-
-	var modData map[string]interface{}
-	for i := 0; i < 2; i++ {
-		resp, err := http.Get(urlStr)
-		if err != nil {
-			fmt.Println("搜索 mod 失败")
-			return nil, err
+	query := func() (map[string]interface{}, error) {
+		var out map[string]interface{}
+		for i := 0; i < 2; i++ {
+			resp, err := http.Get(urlStr + "?" + data.Encode())
+			if err != nil {
+				fmt.Println("搜索 mod 失败")
+				return nil, err
+			}
+			derr := json.NewDecoder(resp.Body).Decode(&out)
+			resp.Body.Close()
+			if derr != nil {
+				fmt.Println("解析 mod 数据失败")
+				return nil, derr
+			}
+			if out["response"] != nil {
+				break
+			}
 		}
-		defer resp.Body.Close()
-		err = json.NewDecoder(resp.Body).Decode(&modData)
-		if err != nil {
-			fmt.Println("解析 mod 数据失败")
-			return nil, err
+		if out == nil || out["response"] == nil {
+			return nil, fmt.Errorf("no response found in mod data")
 		}
-		if modData["response"] != nil {
-			break
-		}
+		return out, nil
 	}
-	if modData["response"] == nil {
-		return nil, fmt.Errorf("no response found in mod data")
+
+	modData, err := query()
+	if err != nil {
+		return nil, err
+	}
+	// 中文检索在 language=6 下分词失灵（实测 total=0）：无结果时去语言过滤重试
+	if resp0, ok := modData["response"].(map[string]interface{}); ok {
+		if t0, ok2 := resp0["total"].(float64); ok2 && int(t0) == 0 && lang == "zh" {
+			data.Set("language", "")
+			if retryData, rerr := query(); rerr == nil {
+				modData = retryData
+			}
+		}
 	}
 
 	modResponse := modData["response"].(map[string]interface{})
 	total := int(modResponse["total"].(float64))
-	modInfoRaw := modResponse["publishedfiledetails"].([]interface{})
+	modInfoRaw, _ := modResponse["publishedfiledetails"].([]interface{})
 
 	modList := make([]ModInfo, 0)
 	if len(modInfoRaw) > 0 {
