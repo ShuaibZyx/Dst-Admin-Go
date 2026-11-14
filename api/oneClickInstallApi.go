@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -266,7 +267,7 @@ func (o *OneClickInstallApi) InstallStatus(ctx *gin.Context) {
 			continue
 		}
 		for _, e := range entries {
-			if len(e.Name()) >= 34 && e.Name()[:34] == "dontstarve_dedicated_server_nullrenderer" {
+			if strings.HasPrefix(e.Name(), "dontstarve_dedicated_server_nullrenderer") {
 				serverOK = true
 			}
 		}
