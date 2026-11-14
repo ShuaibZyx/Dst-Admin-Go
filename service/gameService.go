@@ -3,6 +3,7 @@ package service
 import (
 	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
+	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/levelConfigUtils"
@@ -204,6 +205,17 @@ func (g *GameService) killLevel(clusterName, level string) {
 }
 
 func (g *GameService) StartLevel(clusterName, level string, bin, beta int) {
+	// 启动前同步下载该存档所需模组（已存在跳过）
+	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { log.Println("[模组]", s) }); err != nil {
+		log.Println("[模组] 下载失败:", err)
+	} else if n > 0 {
+		log.Println("[模组] 本次同步下载", n, "个")
+	}
+	// 闸门:海难/火山世界未订阅 IA 模组时拒绝拉起(在停机前判定,避免先停再跳过)
+	if err := mod.CheckIAWorldStart(clusterName, level); err != nil {
+		log.Println("跳过拉起世界:", clusterName, level, err)
+		return
+	}
 	if isWindows() {
 		WindowService.StartLevel(clusterName, level, bin, beta)
 		return
@@ -214,6 +226,11 @@ func (g *GameService) StartLevel(clusterName, level string, bin, beta int) {
 }
 
 func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
+	// 闸门:海难/火山世界未订阅 IA 模组时拒绝拉起(StartGame 批量拉起走这里)
+	if err := mod.CheckIAWorldStart(clusterName, level); err != nil {
+		log.Println("跳过拉起世界:", clusterName, level, err)
+		return
+	}
 	if isWindows() {
 		WindowService.LaunchLevel(clusterName, level, bin, beta)
 		return
