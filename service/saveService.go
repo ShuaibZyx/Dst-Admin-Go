@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
@@ -19,7 +20,8 @@ type SaveInfo struct {
 	Path    string `json:"path"`
 	Current bool   `json:"current"` // 是否为当前部署的存档
 	InPlace bool   `json:"inPlace"` // 是否已在存档目录内
-	Running bool   `json:"running"` // 任一世界是否运行中
+	Running  bool   `json:"running"`  // 任一世界是否运行中
+	Conflict bool   `json:"conflict"` // 存档目录内已有同名存档（搬入会冲突）
 }
 
 // SaveMoveResult 搬家单项结果
@@ -121,9 +123,10 @@ func DetectSaves() []SaveInfo {
 			seen[key] = true
 			name := filepath.Base(p)
 			out = append(out, SaveInfo{
-				Name:    name,
-				Path:    p,
-				Current: name == current,
+				Name:     name,
+				Path:     p,
+				Current:  name == current,
+				Conflict: fileUtils.Exists(filepath.Join(base, name)),
 			})
 		}
 	}
@@ -162,7 +165,7 @@ func MoveSaves(sources []string) []SaveMoveResult {
 			continue
 		}
 		if fileUtils.Exists(target) {
-			results = append(results, SaveMoveResult{Path: src, OK: false, Message: "命名冲突，不可搬入"})
+			results = append(results, SaveMoveResult{Path: src, OK: false, Message: fmt.Sprintf("命名冲突：已存在同名存档「%s」，不可搬入", filepath.Base(src))})
 			continue
 		}
 		if err := MoveDir(src, target); err != nil {
