@@ -18,6 +18,8 @@ import (
 
 type OneClickInstallApi struct{}
 
+var oneclickSession = NewLiveSession()
+
 // oneclickTargets 一键下载的目标目录（全部来自配置）
 func oneclickTargets(cfg dstConfigUtils.DstConfig) (steamcmdDir, serverDir, modDir string) {
 	steamcmdDir = dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Steamcmd, dstConfigUtils.DefaultSteamcmd)
@@ -42,19 +44,20 @@ func (o *OneClickInstallApi) Install(ctx *gin.Context) {
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
 
-	eventCh := make(chan string, 64)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		runOneClick(cfg, steamcmdDir, serverDir, modDir, eventCh)
-		close(eventCh)
-	}()
-
-	for line := range eventCh {
+	oneclickSession.Start(func(send func(string)) {
+		runOneClick(cfg, steamcmdDir, serverDir, modDir, send)
+	})
+	// 已在运行则本次仅"接上"：历史 + 实时跟随，不重复启动
+	backlog, ch, _ := oneclickSession.Attach()
+	for _, line := range backlog {
 		_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", line)
 		ctx.Writer.Flush()
 	}
-	log.Println("oneclick install finished")
+	for line := range ch {
+		_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", line)
+		ctx.Writer.Flush()
+	}
+	log.Println("oneclick install stream end")
 }
 
 // voResponse 简单错误响应（避免在 SSE 头之后写 JSON 的场景）
@@ -62,8 +65,7 @@ func voResponse(code int, msg string) gin.H {
 	return gin.H{"code": code, "msg": msg, "data": nil}
 }
 
-func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir string, eventCh chan string) {
-	send := func(s string) { eventCh <- s }
+func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir string, send func(string)) {
 
 	// 1. 目录（模组目录在下载模组时创建）
 	_ = modDir
@@ -262,5 +264,5 @@ func (o *OneClickInstallApi) InstallStatus(ctx *gin.Context) {
 		}
 	}
 	ctx.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success",
-		"data": gin.H{"steamcmd": steamOK, "server": serverOK}})
+		"data": gin.H{"steamcmd": steamOK, "server": serverOK, "installing": oneclickSession.IsRunning()}})
 }

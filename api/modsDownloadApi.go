@@ -11,6 +11,8 @@ import (
 
 type ModsDownloadApi struct{}
 
+var modsDlSession = NewLiveSession()
+
 // DownloadCurrent 下载当前存档所需模组（SSE 进度）
 func (m *ModsDownloadApi) DownloadCurrent(ctx *gin.Context) {
 	cfg := dstConfigUtils.GetDstConfig()
@@ -36,4 +38,10 @@ func (m *ModsDownloadApi) DownloadCurrent(ctx *gin.Context) {
 		_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", line)
 		ctx.Writer.Flush()
 	}
+}
+
+// DownloadStatus 模组下载任务状态
+func (m *ModsDownloadApi) DownloadStatus(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success",
+		"data": gin.H{"downloading": modsDlSession.IsRunning()}})
 }

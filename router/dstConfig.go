@@ -21,6 +21,7 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 
 	modsDl := api.ModsDownloadApi{}
 	router.GET("/api/dst/mods/download", modsDl.DownloadCurrent)
+	router.GET("/api/dst/mods/status", modsDl.DownloadStatus)
 
 	fsApi := api.FsApi{}
 	router.GET("/api/fs/dirs", fsApi.ListDirs)
