@@ -120,6 +120,13 @@ func RunSteamcmdStream(dir string, args []string, send func(string)) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	// Wait 在独立 goroutine：进程退出后关闭写端给扫描器 EOF，否则互相等待死锁
+	waitCh := make(chan error, 1)
+	go func() {
+		err := cmd.Wait()
+		_ = pw.Close()
+		waitCh <- err
+	}()
 	last := ""
 	lastAt := time.Time{}
 	scanner := bufio.NewScanner(pr)
@@ -146,8 +153,7 @@ func RunSteamcmdStream(dir string, args []string, send func(string)) error {
 			send(line)
 		}
 	}
-	_ = pw.Close()
-	return cmd.Wait()
+	return <-waitCh
 }
 
 func steamcmdExePath(dir string) string {
