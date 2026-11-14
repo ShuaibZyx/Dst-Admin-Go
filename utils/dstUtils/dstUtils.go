@@ -157,8 +157,9 @@ func GetModSetup(clusterName string) string {
 
 func GetDstUpdateCmd(clusterName string) string {
 	cluster := dstConfigUtils.GetDstConfig()
-	steamCmdPath := cluster.Steamcmd
-	dstInstallDir := cluster.Force_install_dir
+	// 走统一解析（父级模式下配置为相对名，直接用会拼错）
+	steamCmdPath := dstConfigUtils.ResolvePath(cluster.Parent_path, cluster.Steamcmd, dstConfigUtils.DefaultSteamcmd)
+	dstInstallDir := dstConfigUtils.ResolvePath(cluster.Parent_path, cluster.Force_install_dir, dstConfigUtils.DefaultServerDir)
 	if cluster.Beta == 1 {
 		dstInstallDir = dstInstallDir + "-beta"
 	}

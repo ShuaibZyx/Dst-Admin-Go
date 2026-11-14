@@ -15,6 +15,9 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 		dstConfig.GET("/clusters", dstConfigApi.GetClusters)
 	}
 
+	oneClick := api.OneClickInstallApi{}
+	router.GET("/api/dst/install/oneclick", oneClick.Install)
+
 	fsApi := api.FsApi{}
 	router.GET("/api/fs/dirs", fsApi.ListDirs)
 	router.POST("/api/fs/mkdir", fsApi.Mkdir)
