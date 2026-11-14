@@ -30,6 +30,7 @@ func initBackupRouter(router *gin.RouterGroup) {
 		save.GET("/detect", saveApi.DetectSaves)
 		save.POST("/upload-folder", saveApi.UploadFolder)
 		save.POST("/move", saveApi.Move)
+		save.POST("/delete", saveApi.DeleteSave)
 	}
 
 }

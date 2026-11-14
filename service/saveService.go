@@ -19,6 +19,7 @@ type SaveInfo struct {
 	Path    string `json:"path"`
 	Current bool   `json:"current"` // 是否为当前部署的存档
 	InPlace bool   `json:"inPlace"` // 是否已在存档目录内
+	Running bool   `json:"running"` // 任一世界是否运行中
 }
 
 // SaveMoveResult 搬家单项结果
@@ -94,7 +95,7 @@ func ListSaves() []SaveInfo {
 	var out []SaveInfo
 	for _, p := range collectClusterDirs(base) {
 		name := filepath.Base(p)
-		out = append(out, SaveInfo{Name: name, Path: p, Current: name == current, InPlace: true})
+		out = append(out, SaveInfo{Name: name, Path: p, Current: name == current, InPlace: true, Running: isSaveRunning(name)})
 	}
 	return out
 }
@@ -232,4 +233,46 @@ func treeStat(root string) (files int, bytes int64, err error) {
 		}
 	}
 	return files, bytes, nil
+}
+
+// isSaveRunning 存档任一世界（shard）是否在运行
+func isSaveRunning(clusterName string) bool {
+	base := filepath.Join(dstUtils.GetKleiDstPath(), clusterName)
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return false
+	}
+	var g GameService
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if !fileUtils.Exists(filepath.Join(base, e.Name(), "server.ini")) {
+			continue
+		}
+		if g.GetLevelStatus(clusterName, e.Name()) {
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteSave 删除存档目录：运行中或非法名拒绝（破坏性操作，调用方需先经用户确认）
+func DeleteSave(name string) error {
+	if name == "" || !fileUtils.ValidName(name) {
+		return errors.New("非法存档名")
+	}
+	if isSaveRunning(name) {
+		return errors.New("存档正在运行，请先停止世界再删除")
+	}
+	base := filepath.Join(dstUtils.GetKleiDstPath(), name)
+	if !dirExists(base) {
+		return errors.New("存档不存在")
+	}
+	return fileUtils.DeleteDir(base)
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

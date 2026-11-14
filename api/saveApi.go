@@ -53,3 +53,19 @@ func (s *SaveApi) Move(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"results": service.MoveSaves(req.Sources)}})
 }
+
+// DeleteSave POST /api/game/save/delete 删除存档（运行中拒绝）
+func (s *SaveApi) DeleteSave(ctx *gin.Context) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := ctx.Bind(&req); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+	if err := service.DeleteSave(req.Name); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "delete success", Data: nil})
+}
