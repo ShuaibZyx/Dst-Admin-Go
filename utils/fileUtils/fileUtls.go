@@ -301,7 +301,7 @@ func CreateFileIfNotExists(path string) error {
 
 func CreateDirIfNotExists(filepath string) {
 	if !Exists(filepath) {
-		CreateDir(filepath)
+		_ = os.MkdirAll(filepath, os.ModePerm) // 递归创建：父目录可能整个不存在（如新选的根目录）
 	}
 }
 

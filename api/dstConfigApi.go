@@ -64,6 +64,11 @@ func (d *DstConfigApi) SaveDstConfig(ctx *gin.Context) {
 		log.Panicln(err)
 	}
 	dstConfigUtils.SaveDstConfig(dstConfig)
+	// 新选的根目录可能尚不存在：先递归建出存档目录，避免后续 open 失败
+	if err := os.MkdirAll(dstUtils.GetKleiDstPath(), os.ModePerm); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: err.Error()})
+		return
+	}
 	global.Collect.ReCollect(filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster), dstConfig.Cluster)
 	initEvnService.InitBaseLevel(dstConfig, "默认初始化的世界", "", true)
 

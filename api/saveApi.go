@@ -2,6 +2,7 @@ package api
 
 import (
 	"dst-admin-go/service"
+	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/vo"
 	"net/http"
@@ -14,9 +15,11 @@ type SaveApi struct{}
 
 // ListSaves 列出存档目录内的存档
 func (s *SaveApi) ListSaves(ctx *gin.Context) {
+	cfg := dstConfigUtils.GetDstConfig()
 	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{
-		"saves": service.ListSaves(),
-		"base":  dstUtils.GetKleiDstPath(),
+		"saves":      service.ListSaves(),
+		"base":       dstUtils.GetKleiDstPath(),
+		"configured": cfg.Parent_path != "",
 	}})
 }
 

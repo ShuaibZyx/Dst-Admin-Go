@@ -130,13 +130,19 @@ func DetectSaves() []SaveInfo {
 }
 
 func isUnder(base, p string) bool {
-	b := filepath.Clean(base)
-	p = filepath.Clean(p)
-	if runtime.GOOS == "windows" {
-		b = strings.ToLower(b)
-		p = strings.ToLower(p)
+	canon := func(s string) string {
+		if abs, err := filepath.Abs(s); err == nil {
+			s = abs
+		}
+		s = filepath.ToSlash(filepath.Clean(s))
+		if runtime.GOOS == "windows" {
+			s = strings.ToLower(s)
+		}
+		return s
 	}
-	return p == b || strings.HasPrefix(p, b+string(filepath.Separator))
+	b := canon(base)
+	p = canon(p)
+	return p == b || strings.HasPrefix(p, b+"/")
 }
 
 // MoveSaves 把外部存档搬进当前存档目录（同名冲突拒绝该项；跨卷复制校验后源改名保留）
