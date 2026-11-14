@@ -105,6 +105,19 @@ func SaveDirOf(cfg DstConfig) string {
 	return saveDir
 }
 
+// UnifiedUgcDir 游戏与面板共用的模组目录（-ugc_directory 参数值）：
+// 显式配置优先；留空且 parent 模式时统一到模组下载目录的 steamapps/workshop 布局
+// （与 SteamCMD 下载缓存完全一致，同一份文件两处共用）；legacy 留空则返回空（游戏默认 ugc_mods）。
+func UnifiedUgcDir(cfg DstConfig) string {
+	if cfg.Ugc_directory != "" {
+		return ResolvePath(cfg.Parent_path, cfg.Ugc_directory, "")
+	}
+	if cfg.Parent_path == "" {
+		return ""
+	}
+	return filepath.Join(ResolvePath(cfg.Parent_path, cfg.Mod_download_path, DefaultMod), "steamapps", "workshop")
+}
+
 // toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
 func toRel(p string) string {
 	p = strings.ReplaceAll(p, `\`, "/")

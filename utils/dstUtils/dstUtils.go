@@ -22,7 +22,7 @@ import (
 func GetUgcWorkshopModPath(clusterName, levelName, workshopId string) string {
 	dstConfig := dstConfigUtils.GetDstConfig()
 	workshopModPath := ""
-	if dstConfig.Ugc_directory != "" {
+	if dstConfigUtils.UnifiedUgcDir(dstConfig) != "" {
 		workshopModPath = filepath.Join(GetUgcModPath(), "content", "322330", workshopId)
 	} else {
 		workshopModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods", clusterName, levelName, "content", "322330", workshopId)
@@ -33,8 +33,8 @@ func GetUgcWorkshopModPath(clusterName, levelName, workshopId string) string {
 func GetUgcModPath() string {
 	dstConfig := dstConfigUtils.GetDstConfig()
 	ugcModPath := ""
-	if dstConfig.Ugc_directory != "" {
-		ugcModPath = dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Ugc_directory, "")
+	if ugc := dstConfigUtils.UnifiedUgcDir(dstConfig); ugc != "" {
+		ugcModPath = ugc
 	} else {
 		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods")
 	}
@@ -45,7 +45,7 @@ func GetUgcAcfPath(clusterName, levelName string) string {
 	ugcModPath := GetUgcModPath()
 	dstConfig := dstConfigUtils.GetDstConfig()
 	p := ""
-	if dstConfig.Ugc_directory == "" {
+	if dstConfigUtils.UnifiedUgcDir(dstConfig) == "" {
 		p = filepath.Join(ugcModPath, clusterName, levelName, "appworkshop_322330.acf")
 	} else {
 		p = filepath.Join(ugcModPath, "appworkshop_322330.acf")

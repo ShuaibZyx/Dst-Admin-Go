@@ -85,3 +85,33 @@ func TestGetClusterEmptyParentReturnsEmpty(t *testing.T) {
 		t.Errorf("parent 未配置时应为空: %+v", c)
 	}
 }
+
+func TestGetClusterUnifiedUgcDir(t *testing.T) {
+	// 留空 → 统一使用模组下载目录（steamapps/workshop 布局，与 SteamCMD 缓存一致）
+	writeTempDstConfig(t, []string{
+		"parent_path=/data/dst",
+		"steamcmd=steamcmd",
+		"force_install_dir=dst-dedicated-server",
+		"mod_download_path=mod",
+		"bin=32",
+		"beta=0",
+	})
+	c := GetCluster("Cluster1")
+	want := filepath.Join("/data/dst", "mod", "steamapps", "workshop")
+	if c.Ugc_directory != want {
+		t.Fatalf("Ugc_directory = %q, want %q", c.Ugc_directory, want)
+	}
+
+	// 显式配置 → 尊重用户值（相对则拼父级）
+	writeTempDstConfig(t, []string{
+		"parent_path=/data/dst",
+		"mod_download_path=mod",
+		"ugc_directory=myugc",
+		"bin=32",
+		"beta=0",
+	})
+	c = GetCluster("Cluster1")
+	if c.Ugc_directory != filepath.Join("/data/dst", "myugc") {
+		t.Fatalf("Ugc_directory = %q, want /data/dst/myugc", c.Ugc_directory)
+	}
+}

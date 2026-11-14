@@ -39,7 +39,7 @@ func toCluster(config dstConfigUtils.DstConfig) *model.Cluster {
 		ModDownloadPath:         dstConfigUtils.ResolvePath(parent, config.Mod_download_path, dstConfigUtils.DefaultMod),
 		Bin:                     config.Bin,
 		Beta:                    config.Beta,
-		Ugc_directory:           config.Ugc_directory,
+		Ugc_directory:           dstConfigUtils.UnifiedUgcDir(config),
 		Persistent_storage_root: persistent,
 		Conf_dir:                confDir,
 	}
