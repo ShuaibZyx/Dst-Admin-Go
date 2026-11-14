@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -92,12 +93,19 @@ func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir st
 
 	// 3. 服务器下载/更新（SteamCMD app_update 343050）
 	send("开始下载/更新饥荒专用服务器（这一步耗时较长，请耐心等待）...")
-	betaArgs := []string{"+login", "anonymous", "+force_install_dir", serverDir, "+app_update", "343050"}
+	betaArgs := []string{"+force_install_dir", serverDir, "+login", "anonymous", "+app_update", "343050"}
 	if cfg.Beta == 1 {
 		betaArgs = append(betaArgs, "-beta", "updatebeta")
 	}
 	betaArgs = append(betaArgs, "validate", "+quit")
-	if err := mod2.RunSteamcmdStream(steamcmdDir, betaArgs, send); err != nil {
+	err := mod2.RunSteamcmdStream(steamcmdDir, betaArgs, send)
+	if err != nil {
+		// SteamCMD 首次会话偶发 Missing configuration，稍候重试一次
+		send("[提示] 下载未成功，10 秒后自动重试一次...")
+		time.Sleep(10 * time.Second)
+		err = mod2.RunSteamcmdStream(steamcmdDir, betaArgs, send)
+	}
+	if err != nil {
 		send("[失败] 服务器下载失败: " + err.Error())
 		return
 	}

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -101,8 +102,13 @@ func EnsureClusterMods(clusterName string, progress func(string)) (int, error) {
 	return n, nil
 }
 
+// steamcmdMu 串行化 steamcmd 调用：并发运行会互抢 app 缓存导致 Missing configuration 等怪错
+var steamcmdMu sync.Mutex
+
 // RunSteamcmdStream 运行 steamcmd 并把输出行实时回调（相同行与高频行节流，关键行必发）
 func RunSteamcmdStream(dir string, args []string, send func(string)) error {
+	steamcmdMu.Lock()
+	defer steamcmdMu.Unlock()
 	exe := steamcmdExePath(dir)
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir
@@ -116,7 +122,7 @@ func RunSteamcmdStream(dir string, args []string, send func(string)) error {
 	lastAt := time.Time{}
 	scanner := bufio.NewScanner(pr)
 	for scanner.Scan() {
-		line := strings.TrimSpace(strings.TrimSuffix(scanner.Text(), ""))
+		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
