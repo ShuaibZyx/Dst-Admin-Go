@@ -100,6 +100,30 @@ func GetLevelConfig(clusterName string) (*LevelConfig, error) {
 		}
 	}
 
+	// 同步磁盘上其余世界目录（含 server.ini 的 shard），缺失的一律补入 level.json
+	if entries, err := os.ReadDir(clusterBasePath); err == nil {
+		known := map[string]bool{}
+		for _, it := range config.LevelList {
+			known[it.File] = true
+		}
+		changed := false
+		for _, e := range entries {
+			if !e.IsDir() || known[e.Name()] {
+				continue
+			}
+			if !fileUtils.Exists(filepath.Join(clusterBasePath, e.Name(), "server.ini")) {
+				continue
+			}
+			config.LevelList = append(config.LevelList, Item{Name: e.Name(), File: e.Name()})
+			changed = true
+		}
+		if changed {
+			if err := SaveLevelConfig(clusterName, &config); err != nil {
+				log.Println(err)
+			}
+		}
+	}
+
 	return &config, nil
 }
 
