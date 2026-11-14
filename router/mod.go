@@ -18,6 +18,7 @@ func initModRouter(router *gin.RouterGroup) {
 		mod.GET("/:modId", modApi.GetModInfo)
 		mod.PUT("/:modId", modApi.UpdateMod)
 		mod.GET("", modApi.GetMyModList)
+		mod.GET("/icon/:modId", modApi.GetModIcon)
 		mod.DELETE("/:modId", modApi.DeleteMod)
 		mod.DELETE("/setup/workshop", modApi.DeleteSetupWorkshop)
 		mod.GET("/modinfo/:modId", modApi.GetModInfoFile)
