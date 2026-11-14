@@ -70,7 +70,7 @@ func (d *DstConfigApi) SaveDstConfig(ctx *gin.Context) {
 		return
 	}
 	global.Collect.ReCollect(filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster), dstConfig.Cluster)
-	initEvnService.InitBaseLevel(dstConfig, "默认初始化的世界", "", true)
+	// 不再自动初始化空档骨架：曾导致删掉的存档在保存配置后再生、挡住宿档搬入
 
 	autoCheck.Manager.ReStart(dstConfig.Cluster)
 
