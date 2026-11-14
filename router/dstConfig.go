@@ -18,6 +18,9 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 	oneClick := api.OneClickInstallApi{}
 	router.GET("/api/dst/install/oneclick", oneClick.Install)
 
+	steamSync := api.SteamSyncApi{}
+	router.GET("/api/dst/steam/sync", steamSync.Sync)
+
 	fsApi := api.FsApi{}
 	router.GET("/api/fs/dirs", fsApi.ListDirs)
 	router.POST("/api/fs/mkdir", fsApi.Mkdir)
