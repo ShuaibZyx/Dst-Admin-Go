@@ -1,6 +1,7 @@
 package service
 
 import (
+	"dst-admin-go/service/mod"
 	"dst-admin-go/model"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstUtils"
@@ -101,6 +102,13 @@ func (g *WindowsGameService) killLevel(clusterName, level string) {
 }
 
 func (g *WindowsGameService) LaunchLevel(clusterName, level string, bin, beta int) {
+	// 启动前同步下载该存档所需模组（已存在跳过）
+	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { log.Println("[模组]", s) }); err != nil {
+		log.Println("[模组] 下载失败:", err)
+	} else if n > 0 {
+		log.Println("[模组] 本次同步下载", n, "个")
+	}
+
 
 	if runtime.GOOS == "windows" {
 		cluster := clusterUtils.GetCluster(clusterName)

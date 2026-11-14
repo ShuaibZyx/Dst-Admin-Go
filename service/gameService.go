@@ -235,6 +235,13 @@ func (g *GameService) StartLevel(clusterName, level string, bin, beta int) {
 }
 
 func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
+	// 启动前同步下载该存档所需模组（已存在跳过）；单世界与全部启动都经此处
+	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { log.Println("[模组]", s) }); err != nil {
+		log.Println("[模组] 下载失败:", err)
+	} else if n > 0 {
+		log.Println("[模组] 本次同步下载", n, "个")
+	}
+
 	// 闸门:海难/火山世界未订阅 IA 模组时拒绝拉起(StartGame 批量拉起走这里)
 	if err := mod.CheckIAWorldStart(clusterName, level); err != nil {
 		log.Println("跳过拉起世界:", clusterName, level, err)

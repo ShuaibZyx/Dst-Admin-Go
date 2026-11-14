@@ -225,6 +225,12 @@ func (g *GameLevel2Api) Start(ctx *gin.Context) {
 	beta := cluster.Beta
 	clusterName := cluster.ClusterName
 
+	// 闸门:海难/火山世界须已订阅 IA 模组才能拉起
+	if err := mod.CheckIAWorldStart(clusterName, levelName); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+
 	startBefore(ctx)
 	if ctx.IsAborted() {
 		return
@@ -262,6 +268,14 @@ func (g *GameLevel2Api) StartAll(ctx *gin.Context) {
 		return
 	}
 	clusterName := cluster.ClusterName
+
+	// 闸门:任一 IA 世界未订阅 IA 模组则拒绝一键启动（与单世界启动一致）
+	for _, w := range gameLevel2Service.GetLevelList(clusterName) {
+		if err := mod.CheckIAWorldStart(clusterName, w.Uuid); err != nil {
+			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+			return
+		}
+	}
 
 	gameService.StartGame(clusterName)
 
@@ -480,6 +494,14 @@ func (g *GameLevel2Api) SaveLevelsList(ctx *gin.Context) {
 		log.Panicln("参数解析错误", err)
 	}
 
+	// 闸门:海难/火山是 IA 模组世界,世界选项必须建立在已订阅基础上
+	for i := range body.Levels {
+		if err := mod.CheckIAWorldWrite(clusterName, body.Levels[i].Leveldataoverride); err != nil {
+			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+			return
+		}
+	}
+
 	err = gameLevel2Service.UpdateLevels(clusterName, body.Levels)
 	if err != nil {
 		log.Panicln("更新世界配置失败", err)
@@ -511,12 +533,6 @@ func (g *GameLevel2Api) DeleteLevel(ctx *gin.Context) {
 	})
 }
 
-// isIAModWorld 判定 leveldataoverride 是否为 IA 模组世界(海难/火山)
-func isIAModWorld(leveldataoverride string) bool {
-	return strings.Contains(leveldataoverride, `location="shipwrecked"`) ||
-		strings.Contains(leveldataoverride, `location="volcano"`)
-}
-
 func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
@@ -527,11 +543,9 @@ func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 	}
 
 	// 闸门:海难/火山是 IA 模组世界,模组未订阅/下载则世界无法加载
-	if isIAModWorld(newLevel.Leveldataoverride) {
-		if !mod.IsModSubscribed(clusterName, "workshop-1467214795") {
-			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "海难/火山是岛屿冒险(IA)模组世界，需先订阅并启用 workshop-1467214795 模组"})
-			return
-		}
+	if err := mod.CheckIAWorldWrite(clusterName, newLevel.Leveldataoverride); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+		return
 	}
 
 	err = gameLevel2Service.CreateLevel(clusterName, newLevel)
@@ -597,8 +611,8 @@ func (g *GameLevel2Api) CreateIAPreset(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 	// 闸门:海难/火山是 IA 模组世界,模组未订阅/下载则世界无法加载
-	if !mod.IsModSubscribed(clusterName, "workshop-1467214795") {
-		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "海难/火山是岛屿冒险(IA)模组世界，需先订阅并启用 workshop-1467214795 模组"})
+	if err := mod.CheckIAWorldWrite(clusterName, `location="shipwrecked"`); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
 	worlds := levelConfigUtils.GenerateIAPreset(mode)

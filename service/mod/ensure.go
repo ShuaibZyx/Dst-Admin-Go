@@ -84,8 +84,13 @@ func DownloadModToUnified(modid string, progress func(string)) error {
 	return nil
 }
 
+// ensureModsMu 串行化：多世界并发启动时避免同一模组重复下载
+var ensureModsMu sync.Mutex
+
 // EnsureClusterMods 启动世界前同步下载该存档所需模组（已存在跳过），返回本次下载数量
 func EnsureClusterMods(clusterName string, progress func(string)) (int, error) {
+	ensureModsMu.Lock()
+	defer ensureModsMu.Unlock()
 	ids := ClusterModIDs(clusterName)
 	n := 0
 	for _, id := range ids {
