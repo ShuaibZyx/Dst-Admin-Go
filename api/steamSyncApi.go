@@ -88,6 +88,27 @@ func (s *SteamSyncApi) Sync(ctx *gin.Context) {
 	}
 }
 
+// Check 校验 Steam 主页链接：可解析且资料公开时返回订阅模组数量
+func (s *SteamSyncApi) Check(ctx *gin.Context) {
+	profile := strings.TrimSpace(ctx.Query("profile"))
+	steamID := extractSteamID64(profile)
+	if steamID == "" && regexp.MustCompile(`^\d{17}$`).MatchString(profile) {
+		steamID = profile
+	}
+	if steamID == "" {
+		ctx.JSON(http.StatusOK, gin.H{"code": 400, "msg": "链接格式不对，需要 steamcommunity.com/profiles/<17位数字>", "data": nil})
+		return
+	}
+	url := fmt.Sprintf("https://steamcommunity.com/profiles/%s/myworkshopfiles/?appid=322330&browsefilter=mysubscriptions", steamID)
+	body, err := httpGet(url)
+	if err != nil {
+		ctx.JSON(http.StatusOK, gin.H{"code": 400, "msg": "无法访问该主页，资料需设为公开", "data": nil})
+		return
+	}
+	ids := extractWorkshopIDs(body)
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": gin.H{"steamID": steamID, "count": len(ids)}})
+}
+
 func runSteamSync(cfg dstConfigUtils.DstConfig, steamID string, eventCh chan string) {
 	send := func(s string) { eventCh <- s }
 

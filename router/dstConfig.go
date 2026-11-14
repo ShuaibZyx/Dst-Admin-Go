@@ -20,6 +20,7 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 
 	steamSync := api.SteamSyncApi{}
 	router.GET("/api/dst/steam/sync", steamSync.Sync)
+	router.GET("/api/dst/steam/check", steamSync.Check)
 
 	fsApi := api.FsApi{}
 	router.GET("/api/fs/dirs", fsApi.ListDirs)
