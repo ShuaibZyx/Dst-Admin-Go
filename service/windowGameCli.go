@@ -77,8 +77,28 @@ func matchLevelCmdline(cmdline []string, cluster, level string) bool {
 	return strings.Contains(joined, "-cluster "+cluster) && strings.Contains(joined, "-shard "+level)
 }
 
+// pidCache 短 TTL 缓存：状态轮询每次全量扫进程过重（曾拖垮 /status 至超时）
+type pidEntry struct {
+	pid int32
+	at  time.Time
+}
+
+var pidCache sync.Map
+
 // findLevelPid 扫描真实进程找回世界 pid（面板重启后或外部启动的场景）
 func findLevelPid(cluster, level string) int32 {
+	cacheKey := cluster + "/" + level
+	if v, ok := pidCache.Load(cacheKey); ok {
+		if e := v.(pidEntry); time.Since(e.at) < 5*time.Second {
+			return e.pid
+		}
+	}
+	pid := scanLevelPid(cluster, level)
+	pidCache.Store(cacheKey, pidEntry{pid: pid, at: time.Now()})
+	return pid
+}
+
+func scanLevelPid(cluster, level string) int32 {
 	procs, err := process.Processes()
 	if err != nil {
 		return 0

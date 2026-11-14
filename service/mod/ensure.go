@@ -67,7 +67,13 @@ func DownloadModToUnified(modid string, progress func(string)) error {
 		return errors.New("未安装 SteamCMD，请先在系统设置使用「一键下载系统组件」")
 	}
 	report("下载模组 " + modid + " ...")
-	err := RunSteamcmdStream(steamcmdDir, []string{"+login", "anonymous", "+workshop_download_item", "322330", modid, "+quit"}, report)
+	args := []string{"+login", "anonymous", "+workshop_download_item", "322330", modid, "+quit"}
+	err := RunSteamcmdStream(steamcmdDir, args, report)
+	if err != nil {
+		report("[提示] 模组 " + modid + " 下载未成功，5 秒后重试一次...")
+		time.Sleep(5 * time.Second)
+		err = RunSteamcmdStream(steamcmdDir, args, report)
+	}
 	if err != nil {
 		return errors.New("模组 " + modid + " 下载失败: " + err.Error())
 	}
