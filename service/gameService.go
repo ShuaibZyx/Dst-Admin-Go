@@ -123,6 +123,15 @@ func (g *GameService) updateDepotDownloader() error {
 	return nil
 }
 
+// RewriteModSetup 按各世界 modoverrides 重写 dedicated_server_mods_setup.lua
+func (g *GameService) RewriteModSetup(clusterName string) {
+	levelConfig, _ := levelConfigUtils.GetLevelConfig(clusterName)
+	for i := range levelConfig.LevelList {
+		level := homeServe.GetLevel(clusterName, levelConfig.LevelList[i].File)
+		dstUtils.DedicatedServerModsSetup2(clusterName, level.Modoverrides)
+	}
+}
+
 func (g *GameService) UpdateGame(clusterName string) error {
 
 	dstConfig := dstConfigUtils.GetDstConfig()
