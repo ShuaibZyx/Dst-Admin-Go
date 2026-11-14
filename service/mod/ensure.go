@@ -112,6 +112,8 @@ func RunSteamcmdStream(dir string, args []string, send func(string)) error {
 	exe := steamcmdExePath(dir)
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = dir
+	// steamcmd 退出后其子进程可能仍占着管道导致读取悬挂：进程退出后最多等 3s 即收尾
+	cmd.WaitDelay = 3 * time.Second
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 	cmd.Stderr = pw
