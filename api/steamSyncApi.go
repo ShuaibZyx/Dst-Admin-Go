@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,6 +47,20 @@ func extractWorkshopIDs(html string) []string {
 		}
 	}
 	return ids
+}
+
+// steamHttpClient 支持 KV 里配置的网络代理（steamcommunity 国内常需代理）
+func steamHttpClient() *http.Client {
+	proxy := strings.TrimSpace(kvGet("steam_proxy"))
+	if proxy == "" {
+		return &http.Client{Timeout: 30 * time.Second}
+	}
+	u, err := url.Parse(proxy)
+	if err != nil {
+		return &http.Client{Timeout: 30 * time.Second}
+	}
+	tr := &http.Transport{Proxy: http.ProxyURL(u)}
+	return &http.Client{Timeout: 30 * time.Second, Transport: tr}
 }
 
 func kvGet(key string) string {
@@ -102,7 +118,11 @@ func (s *SteamSyncApi) Check(ctx *gin.Context) {
 	url := fmt.Sprintf("https://steamcommunity.com/profiles/%s/myworkshopfiles/?appid=322330&browsefilter=mysubscriptions", steamID)
 	body, err := httpGet(url)
 	if err != nil {
-		ctx.JSON(http.StatusOK, gin.H{"code": 400, "msg": "无法访问该主页，资料需设为公开", "data": nil})
+		ctx.JSON(http.StatusOK, gin.H{"code": 400, "msg": "无法连接 Steam 社区（steamcommunity.com），国内网络请在网络代理里填加速器/Clash 的本地代理（如 http://127.0.0.1:7890）", "data": nil})
+		return
+	}
+	if strings.Contains(body, "This profile is private") {
+		ctx.JSON(http.StatusOK, gin.H{"code": 400, "msg": "该资料是私密的：Steam 网站 → 编辑个人资料 → 隐私设置 → 游戏详情设为公开", "data": nil})
 		return
 	}
 	ids := extractWorkshopIDs(body)
@@ -185,7 +205,7 @@ func httpGet(url string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (dst-admin-go)")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := steamHttpClient().Do(req)
 	if err != nil {
 		return "", err
 	}
