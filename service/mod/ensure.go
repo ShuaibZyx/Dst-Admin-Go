@@ -179,28 +179,32 @@ func steamcmdExePath(dir string) string {
 }
 
 // DownloadMods 下载/校验模组集合：ids 为空=当前存档全部；force 先删本地副本强制重下
-func DownloadMods(clusterName string, ids []string, force bool, progress func(string)) (int, error) {
+func DownloadMods(clusterName string, ids []string, force bool, progress func(string)) (done int, failed int, err error) {
 	if len(ids) == 0 {
 		ids = ClusterModIDs(clusterName)
 	}
-	n := 0
 	for _, id := range ids {
 		if force {
 			cfg := dstConfigUtils.GetDstConfig()
 			modsRoot := filepath.Join(dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Mod_download_path, dstConfigUtils.DefaultMod), "steamapps", "workshop", "content", "322330")
-			if err := os.RemoveAll(filepath.Join(modsRoot, id)); err != nil {
+			if rerr := os.RemoveAll(filepath.Join(modsRoot, id)); rerr != nil {
+				failed++
 				if progress != nil {
-					progress("[失败] 清理模组 " + id + " 旧文件失败: " + err.Error())
+					progress("[失败] 模组 " + id + " 无法清理旧文件（世界运行中会被占用，请停止后重试）")
 				}
 				continue
 			}
 		}
-		if err := DownloadModToUnified(id, progress); err != nil {
-			return n, err
+		if derr := DownloadModToUnified(id, progress); derr != nil {
+			failed++
+			if progress != nil {
+				progress("[失败] " + derr.Error())
+			}
+			continue
 		}
-		n++
+		done++
 	}
-	return n, nil
+	return done, failed, nil
 }
 
 // SyncMods 一键模组维护：mode="repair" 校验并修复问题项；mode="redownload" 全部强制重下。
@@ -235,18 +239,27 @@ func SyncMods(clusterName, mode string, progress func(string)) (string, error) {
 	if mode == "redownload" {
 		target = ids
 		force = true
-		report("全部重新下载 %d 个模组...", len(target))
-	} else if len(target) > 0 {
+		report("全部重新下载 %d 个模组（需先停止所有世界，否则文件被占用会跳过）...", len(target))
+	} else if len(target) == 0 {
+		report("校验完成：%d 个模组全部完整，无需下载", ok)
+		report("刷新模组信息...")
+		UpdateModinfoList("zh")
+		return fmt.Sprintf("完成：校验 %d 个模组全部完整", len(statuses)), nil
+	} else {
 		report("修复 %d 个问题模组...", len(target))
 	}
-	n, err := DownloadMods(clusterName, target, force, progress)
+	n, failed, err := DownloadMods(clusterName, target, force, progress)
 	if err != nil {
 		return "", err
 	}
-	report("模组下载完成，共处理 %d 个", n)
+	if failed > 0 {
+		report("下载结束：成功 %d，失败 %d（失败多因世界运行中文件被占用）", n, failed)
+	} else {
+		report("模组下载完成，共处理 %d 个", n)
+	}
 
 	report("刷新模组信息...")
 	UpdateModinfoList("zh")
 	report("模组信息已更新")
-	return fmt.Sprintf("完成：校验 %d，修复/下载 %d", len(statuses), n), nil
+	return fmt.Sprintf("完成：校验 %d，成功 %d，失败 %d", len(statuses), n, failed), nil
 }
