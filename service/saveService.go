@@ -162,7 +162,7 @@ func MoveSaves(sources []string) []SaveMoveResult {
 			continue
 		}
 		if fileUtils.Exists(target) {
-			results = append(results, SaveMoveResult{Path: src, OK: false, Message: "同名存档已存在"})
+			results = append(results, SaveMoveResult{Path: src, OK: false, Message: "命名冲突，不可搬入"})
 			continue
 		}
 		if err := MoveDir(src, target); err != nil {
