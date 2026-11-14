@@ -20,10 +20,10 @@ func writeTempDstConfig(t *testing.T, lines []string) {
 
 func TestGetKleiDstPathBetaBranch(t *testing.T) {
 	writeTempDstConfig(t, []string{
-		"persistent_storage_root=/P",
+		"parent_path=/P",
 		"beta=1",
 	})
-	want := filepath.Join("/P", "DoNotStarveTogetherBetaBranch")
+	want := filepath.Join("/P", "world-beta")
 	if got := GetKleiDstPath(); got != want {
 		t.Fatalf("GetKleiDstPath() = %q, want %q", got, want)
 	}
@@ -31,10 +31,22 @@ func TestGetKleiDstPathBetaBranch(t *testing.T) {
 
 func TestGetKleiDstPathNonBeta(t *testing.T) {
 	writeTempDstConfig(t, []string{
-		"persistent_storage_root=/P",
+		"parent_path=/P",
 		"beta=0",
 	})
-	want := filepath.Join("/P", "DoNotStarveTogether")
+	want := filepath.Join("/P", "world")
+	if got := GetKleiDstPath(); got != want {
+		t.Fatalf("GetKleiDstPath() = %q, want %q", got, want)
+	}
+}
+
+func TestGetKleiDstPathCustomSaveDir(t *testing.T) {
+	writeTempDstConfig(t, []string{
+		"parent_path=/P",
+		"conf_dir=saves",
+		"beta=0",
+	})
+	want := filepath.Join("/P", "saves")
 	if got := GetKleiDstPath(); got != want {
 		t.Fatalf("GetKleiDstPath() = %q, want %q", got, want)
 	}

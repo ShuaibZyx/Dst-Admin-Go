@@ -99,7 +99,7 @@ func ListSaves() []SaveInfo {
 	return out
 }
 
-// DetectSaves 检测已知位置里现有的存档（含存档目录内的，标 InPlace）
+// DetectSaves 检测已知位置里现有的存档（已在存档目录内的不返回——无需搬入）
 func DetectSaves() []SaveInfo {
 	base := dstUtils.GetKleiDstPath()
 	current := dstConfigUtils.GetDstConfig().Cluster
@@ -107,6 +107,9 @@ func DetectSaves() []SaveInfo {
 	var out []SaveInfo
 	for _, root := range append([]string{base}, saveScanRoots()...) {
 		for _, p := range collectClusterDirs(root) {
+			if isUnder(base, p) {
+				continue
+			}
 			key := strings.ToLower(filepath.Clean(p))
 			if runtime.GOOS != "windows" {
 				key = filepath.Clean(p)
@@ -120,7 +123,6 @@ func DetectSaves() []SaveInfo {
 				Name:    name,
 				Path:    p,
 				Current: name == current,
-				InPlace: isUnder(base, p),
 			})
 		}
 	}

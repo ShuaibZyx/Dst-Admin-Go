@@ -15,7 +15,7 @@ import (
 func TestGetClustersListsSaves(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	parent := t.TempDir()
-	base := filepath.Join(parent, "world", "DoNotStarveTogether")
+	base := filepath.Join(parent, "world")
 	for name, marker := range map[string]string{"Alpha": "cluster.ini", "Beta": "Master", "bak": ""} {
 		dir := filepath.Join(base, name)
 		if err := os.MkdirAll(filepath.Join(dir, marker), 0755); err != nil && marker != "" {

@@ -9,7 +9,7 @@ import (
 
 func TestGetLevelConfigRegistersAllShardDirs(t *testing.T) {
 	parent := t.TempDir()
-	base := filepath.Join(parent, "world", "DoNotStarveTogether", "ROGIA")
+	base := filepath.Join(parent, "world", "ROGIA")
 	// 磁盘上四个世界目录（Master/Caves + 两个自定义）
 	for _, name := range []string{"Master", "Caves", "Shipwrecked", "Volcano"} {
 		if err := os.MkdirAll(filepath.Join(base, name), 0755); err != nil {
@@ -54,7 +54,7 @@ func TestGetLevelConfigRegistersAllShardDirs(t *testing.T) {
 
 func TestGetLevelConfigTranslatesExistingEnglishNames(t *testing.T) {
 	parent := t.TempDir()
-	base := filepath.Join(parent, "world", "DoNotStarveTogether", "ROGIA")
+	base := filepath.Join(parent, "world", "ROGIA")
 	for _, name := range []string{"Shipwrecked", "Volcano"} {
 		if err := os.MkdirAll(filepath.Join(base, name), 0755); err != nil {
 			t.Fatal(err)

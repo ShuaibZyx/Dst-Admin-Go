@@ -14,7 +14,10 @@ type SaveApi struct{}
 
 // ListSaves 列出存档目录内的存档
 func (s *SaveApi) ListSaves(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"saves": service.ListSaves()}})
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{
+		"saves": service.ListSaves(),
+		"base":  dstUtils.GetKleiDstPath(),
+	}})
 }
 
 // DetectSaves 检测已知位置里现有的存档

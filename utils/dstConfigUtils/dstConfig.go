@@ -93,6 +93,18 @@ const (
 	DefaultWorlds    = "world"
 )
 
+// SaveDirOf 存档目录名：conf_dir（UI"存档目录"）或默认 world；beta=1 加 -beta 后缀
+func SaveDirOf(cfg DstConfig) string {
+	saveDir := cfg.Conf_dir
+	if saveDir == "" {
+		saveDir = DefaultWorlds
+	}
+	if cfg.Beta == 1 {
+		saveDir += "-beta"
+	}
+	return saveDir
+}
+
 // toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
 func toRel(p string) string {
 	p = strings.ReplaceAll(p, `\`, "/")

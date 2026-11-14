@@ -55,26 +55,24 @@ func GetUgcAcfPath(clusterName, levelName string) string {
 
 func GetKleiDstPath() string {
 	dstConfig := dstConfigUtils.GetDstConfig()
+	if dstConfig.Parent_path != "" {
+		// 存档目录 = <根目录>/<存档目录名>，各存档直接放在其下
+		return filepath.Join(dstConfig.Parent_path, dstConfigUtils.SaveDirOf(dstConfig))
+	}
+	// legacy：Klei 默认或自定义 persistent_storage_root + conf_dir
 	confDir := dstConfig.Conf_dir
 	persistentStorageRoot := dstConfig.Persistent_storage_root
-	if dstConfig.Parent_path != "" {
-		persistentStorageRoot = dstConfigUtils.ResolvePath(dstConfig.Parent_path, persistentStorageRoot, dstConfigUtils.DefaultWorlds)
-	}
-	kleiDstPath := ""
 	if persistentStorageRoot == "" {
-		kleiDstPath = dstConfigUtils.KleiDstPath()
-	} else {
-		if confDir == "" {
-			// §9: 与 beta=1 的存档目录命名保持一致
-			if dstConfig.Beta == 1 {
-				confDir = "DoNotStarveTogetherBetaBranch"
-			} else {
-				confDir = "DoNotStarveTogether"
-			}
-		}
-		kleiDstPath = filepath.Join(persistentStorageRoot, confDir)
+		return dstConfigUtils.KleiDstPath()
 	}
-	return kleiDstPath
+	if confDir == "" {
+		if dstConfig.Beta == 1 {
+			confDir = "DoNotStarveTogetherBetaBranch"
+		} else {
+			confDir = "DoNotStarveTogether"
+		}
+	}
+	return filepath.Join(persistentStorageRoot, confDir)
 }
 
 func GetBlacklistPath(clusterName string) string {

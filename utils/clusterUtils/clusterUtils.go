@@ -24,10 +24,12 @@ func GetClusterFromGin(ctx *gin.Context) *model.Cluster {
 // toCluster 把 dst_config 解析成绝对路径后的集群视图（§8 读取边界）
 func toCluster(config dstConfigUtils.DstConfig) *model.Cluster {
 	parent := config.Parent_path
-	// 存档根：仅 parent 模式下空值取 DefaultWorlds；legacy 空值保持为空（继续走 Klei 默认）
+	// parent 模式：游戏存档写到 <根目录>/<存档目录名>/<cluster>
 	persistent := config.Persistent_storage_root
+	confDir := config.Conf_dir
 	if parent != "" {
-		persistent = dstConfigUtils.ResolvePath(parent, persistent, dstConfigUtils.DefaultWorlds)
+		persistent = parent
+		confDir = dstConfigUtils.SaveDirOf(config)
 	}
 	cluster := model.Cluster{
 		SteamCmd:                dstConfigUtils.ResolvePath(parent, config.Steamcmd, dstConfigUtils.DefaultSteamcmd),
@@ -39,7 +41,7 @@ func toCluster(config dstConfigUtils.DstConfig) *model.Cluster {
 		Beta:                    config.Beta,
 		Ugc_directory:           config.Ugc_directory,
 		Persistent_storage_root: persistent,
-		Conf_dir:                config.Conf_dir,
+		Conf_dir:                confDir,
 	}
 	return &cluster
 }

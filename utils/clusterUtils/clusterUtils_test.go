@@ -43,8 +43,11 @@ func TestGetClusterResolvesRelativePaths(t *testing.T) {
 	if c.ModDownloadPath != filepath.Join(parent, "mod") {
 		t.Errorf("ModDownloadPath = %q", c.ModDownloadPath)
 	}
-	if c.Persistent_storage_root != filepath.Join(parent, "world") {
-		t.Errorf("Persistent_storage_root = %q, want <parent>/worlds", c.Persistent_storage_root)
+	if c.Persistent_storage_root != parent {
+		t.Errorf("Persistent_storage_root = %q, want 根目录本身", c.Persistent_storage_root)
+	}
+	if c.Conf_dir != "world" {
+		t.Errorf("Conf_dir = %q, want world", c.Conf_dir)
 	}
 }
 
