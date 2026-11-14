@@ -65,9 +65,10 @@ func voResponse(code int, msg string) gin.H {
 func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir string, eventCh chan string) {
 	send := func(s string) { eventCh <- s }
 
-	// 1. 目录
-	send("创建目录： " + steamcmdDir + " / " + serverDir + " / " + modDir)
-	for _, d := range []string{steamcmdDir, serverDir, modDir} {
+	// 1. 目录（模组目录在下载模组时创建）
+	_ = modDir
+	send("创建目录： " + steamcmdDir + " / " + serverDir)
+	for _, d := range []string{steamcmdDir, serverDir} {
 		if err := os.MkdirAll(d, os.ModePerm); err != nil {
 			send("[失败] 创建目录 " + d + " : " + err.Error())
 			return
@@ -98,7 +99,7 @@ func runOneClick(cfg dstConfigUtils.DstConfig, steamcmdDir, serverDir, modDir st
 		send("[失败] 服务器下载失败: " + err.Error())
 		return
 	}
-	send("完成！SteamCMD、专用服务器、模组目录已就绪。")
+	send("完成！SteamCMD 与专用服务器已就绪。")
 }
 
 func steamcmdExePath(dir string) string {
