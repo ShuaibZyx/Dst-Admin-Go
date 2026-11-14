@@ -100,13 +100,27 @@ func GetLevelConfig(clusterName string) (*LevelConfig, error) {
 		}
 	}
 
+	// 已知世界目录的中文显示名
+	shardDisplayNames := map[string]string{
+		"Master":      "森林",
+		"Caves":       "洞穴",
+		"Shipwrecked": "海难",
+		"Volcano":     "火山",
+		"Porkland":    "哈姆雷特",
+	}
+
 	// 同步磁盘上其余世界目录（含 server.ini 的 shard），缺失的一律补入 level.json
 	if entries, err := os.ReadDir(clusterBasePath); err == nil {
 		known := map[string]bool{}
-		for _, it := range config.LevelList {
-			known[it.File] = true
-		}
 		changed := false
+		for i := range config.LevelList {
+			known[config.LevelList[i].File] = true
+			// 存量英文名（Name 仍是目录名）就地翻译
+			if nice, ok := shardDisplayNames[config.LevelList[i].File]; ok && config.LevelList[i].Name == config.LevelList[i].File {
+				config.LevelList[i].Name = nice
+				changed = true
+			}
+		}
 		for _, e := range entries {
 			if !e.IsDir() || known[e.Name()] {
 				continue
@@ -114,7 +128,11 @@ func GetLevelConfig(clusterName string) (*LevelConfig, error) {
 			if !fileUtils.Exists(filepath.Join(clusterBasePath, e.Name(), "server.ini")) {
 				continue
 			}
-			config.LevelList = append(config.LevelList, Item{Name: e.Name(), File: e.Name()})
+			name := e.Name()
+			if nice, ok := shardDisplayNames[name]; ok {
+				name = nice
+			}
+			config.LevelList = append(config.LevelList, Item{Name: name, File: e.Name()})
 			changed = true
 		}
 		if changed {
