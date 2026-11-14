@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -99,4 +100,20 @@ func listRoots() []dirItem {
 		roots = []dirItem{}
 	}
 	return roots
+}
+
+// Mkdir 递归创建目录（选择根目录时目标不存在的场景，前端弹窗确认后调用）
+func (f *FsApi) Mkdir(ctx *gin.Context) {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := ctx.Bind(&req); err != nil || strings.TrimSpace(req.Path) == "" {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 400, Msg: "path required"})
+		return
+	}
+	if err := os.MkdirAll(req.Path, os.ModePerm); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: gin.H{"path": req.Path}})
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -95,5 +96,25 @@ func TestListDirsRootsSentinelListsDrives(t *testing.T) {
 	}
 	if resp.Code != 200 || len(resp.Data.Dirs) == 0 {
 		t.Fatalf("code=%d dirs=%v body=%s", resp.Code, resp.Data.Dirs, w.Body.String())
+	}
+}
+
+func TestMkdirCreatesNested(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := gin.New()
+	fsApi := FsApi{}
+	app.POST("/api/fs/mkdir", fsApi.Mkdir)
+
+	target := filepath.Join(t.TempDir(), "DST-Server", "world")
+	body, _ := json.Marshal(map[string]string{"path": target})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/fs/mkdir", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	app.ServeHTTP(w, req)
+	if w.Code != http.StatusOK || !filepath.IsAbs(target) {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	if info, err := os.Stat(target); err != nil || !info.IsDir() {
+		t.Fatalf("目录未创建: %v", err)
 	}
 }
