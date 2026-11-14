@@ -21,8 +21,8 @@ func TestOneclickTargets(t *testing.T) {
 	if srv != filepath.Join("/data/dst", "dst-dedicated-server") {
 		t.Errorf("server = %q", srv)
 	}
-	if mod != filepath.Join("/data/dst", "mod") {
-		t.Errorf("mod = %q", mod)
+	if mod != filepath.Join("/data/dst", "mods") {
+		t.Errorf("mod = %q, want mods（旧别名归一）", mod)
 	}
 
 	// beta=1 → 服务器目录带 -beta

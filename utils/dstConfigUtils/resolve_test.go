@@ -13,11 +13,14 @@ func TestResolvePath(t *testing.T) {
 		{"相对拼父级", `D:\DST`, "steamcmd", "steamcmd", filepath.Join(`D:\DST`, "steamcmd")},
 		{"绝对路径剥成相对", `D:\DST`, `C:\other\backup`, "backup", filepath.Join(`D:\DST`, "other", "backup")},
 		{"home 前缀剥掉", `D:\DST`, "~/steamcmd", "steamcmd", filepath.Join(`D:\DST`, "steamcmd")},
-		{"空值取默认", `D:\DST`, "", "mod", filepath.Join(`D:\DST`, "mod")},
+		{"空值取默认", `D:\DST`, "", "mods", filepath.Join(`D:\DST`, "mods")},
 		{"空值空默认", `D:\DST`, "", "", ""},
 		{"parent 空返回空", "", "steamcmd", "steamcmd", ""},
 		{"含空格父级", "/opt/dst parent", "mod", "mod", filepath.Join("/opt/dst parent", "mod")},
 		{"多级相对", "/p", "a/b", "x", filepath.Join("/p", "a", "b")},
+		{"旧单数别名归一", `D:\DST`, "world", "worlds", filepath.Join(`D:\DST`, "worlds")},
+		{"旧单数别名归一mod", `D:\DST`, "mod", "mods", filepath.Join(`D:\DST`, "mods")},
+		{"旧单数别名归一backup", `D:\DST`, "backup", "backups", filepath.Join(`D:\DST`, "backups")},
 	}
 	for _, c := range cases {
 		if got := ResolvePath(c.parent, c.p, c.def); got != c.want {

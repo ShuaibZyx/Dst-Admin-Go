@@ -37,10 +37,10 @@ func TestGetClusterResolvesRelativePaths(t *testing.T) {
 	if c.ForceInstallDir != filepath.Join(parent, "dst-dedicated-server") {
 		t.Errorf("ForceInstallDir = %q", c.ForceInstallDir)
 	}
-	if c.Backup != filepath.Join(parent, "backup") {
+	if c.Backup != filepath.Join(parent, "backups") {
 		t.Errorf("Backup = %q", c.Backup)
 	}
-	if c.ModDownloadPath != filepath.Join(parent, "mod") {
+	if c.ModDownloadPath != filepath.Join(parent, "mods") {
 		t.Errorf("ModDownloadPath = %q", c.ModDownloadPath)
 	}
 	if c.Persistent_storage_root != parent {
@@ -97,7 +97,7 @@ func TestGetClusterUnifiedUgcDir(t *testing.T) {
 		"beta=0",
 	})
 	c := GetCluster("Cluster1")
-	want := filepath.Join("/data/dst", "mod", "steamapps", "workshop")
+	want := filepath.Join("/data/dst", "mods", "steamapps", "workshop")
 	if c.Ugc_directory != want {
 		t.Fatalf("Ugc_directory = %q, want %q", c.Ugc_directory, want)
 	}

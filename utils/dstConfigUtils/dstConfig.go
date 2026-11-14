@@ -59,7 +59,6 @@ func IsBeta() bool {
 type DstConfig struct {
 	Steamcmd                   string `json:"steamcmd"`
 	Force_install_dir          string `json:"force_install_dir"`
-	DoNotStarveServerDirectory string `json:"donot_starve_server_directory"`
 	Cluster                    string `json:"cluster"`
 	Parent_path                string `json:"parent_path"`
 	Last_parent_path           string `json:"last_parent_path"`
@@ -68,7 +67,6 @@ type DstConfig struct {
 	Bin                        int    `json:"bin"`
 	Beta                       int    `json:"beta"`
 
-	Ugc_directory string `json:"ugc_directory"`
 	// 根目录位置
 	Persistent_storage_root string `json:"persistent_storage_root"`
 	// 存档相对位置
@@ -95,7 +93,7 @@ const (
 
 // SaveDirOf 存档目录名：conf_dir（UI"存档目录"）或默认 world；beta=1 加 -beta 后缀
 func SaveDirOf(cfg DstConfig) string {
-	saveDir := cfg.Conf_dir
+	saveDir := NormalizeAlias(cfg.Conf_dir)
 	if saveDir == "" {
 		saveDir = DefaultWorlds
 	}
@@ -113,6 +111,22 @@ func UnifiedUgcDir(cfg DstConfig) string {
 		return ""
 	}
 	return filepath.Join(ResolvePath(cfg.Parent_path, cfg.Mod_download_path, DefaultMod), "steamapps", "workshop")
+}
+
+// legacyAlias 旧单数默认值 → 复数（旧配置残留值在读取时归一，避免继续写单数目录）
+var legacyAlias = map[string]string{
+	"backup":      "backups",
+	"mod":         "mods",
+	"world":       "worlds",
+	"world-beta":  "worlds-beta",
+}
+
+// NormalizeAlias 旧默认别名归一（仅当值恰好等于旧默认时生效）
+func NormalizeAlias(v string) string {
+	if alias, ok := legacyAlias[v]; ok {
+		return alias
+	}
+	return v
 }
 
 // toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
@@ -138,6 +152,7 @@ func ResolvePath(parent, p, def string) string {
 	if p == "" {
 		p = def
 	}
+	p = NormalizeAlias(p)
 	if p == "" {
 		return ""
 	}
@@ -180,13 +195,6 @@ func GetDstConfig() DstConfig {
 			if len(split) > 1 {
 				s := strings.TrimSpace(split[1])
 				dstConfig.Force_install_dir = s
-			}
-		}
-		if strings.Contains(value, "donot_starve_server_directory=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.DoNotStarveServerDirectory = s
 			}
 		}
 		if strings.Contains(value, "persistent_storage_root=") {
@@ -247,13 +255,6 @@ func GetDstConfig() DstConfig {
 				dstConfig.Beta = int(beta)
 			}
 		}
-		if strings.Contains(value, "ugc_directory=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Ugc_directory = s
-			}
-		}
 		if strings.Contains(value, "conf_dir=") {
 			split := strings.Split(value, "=")
 			if len(split) > 1 {
@@ -283,9 +284,6 @@ func SaveDstConfig(dstConfig *DstConfig) {
 	if dstConfig.Force_install_dir == "" {
 		dstConfig.Force_install_dir = oldDstConfig.Force_install_dir
 	}
-	//if dstConfig.Ugc_directory == "" {
-	//	dstConfig.Ugc_directory = oldDstConfig.Ugc_directory
-	//}
 	//if dstConfig.Conf_dir == "" {
 	//	dstConfig.Conf_dir = oldDstConfig.Conf_dir
 	//}
@@ -313,8 +311,6 @@ func SaveDstConfig(dstConfig *DstConfig) {
 		"last_parent_path=" + dstConfig.Last_parent_path,
 		"steamcmd=" + dstConfig.Steamcmd,
 		"force_install_dir=" + dstConfig.Force_install_dir,
-		"donot_starve_server_directory=" + dstConfig.DoNotStarveServerDirectory,
-		"ugc_directory=" + dstConfig.Ugc_directory,
 		"conf_dir=" + dstConfig.Conf_dir,
 		"persistent_storage_root=" + dstConfig.Persistent_storage_root,
 		"cluster=" + dstConfig.Cluster,
