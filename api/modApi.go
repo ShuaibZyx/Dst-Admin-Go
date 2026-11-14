@@ -56,7 +56,6 @@ func (m *ModApi) GetModInfo(ctx *gin.Context) {
 	}
 	var mod_config map[string]interface{}
 	_ = json.Unmarshal([]byte(modinfo.ModConfig), &mod_config)
-	name, img := modMetaWithFallback(modinfo)
 	modData := map[string]interface{}{
 		"auth":          modinfo.Auth,
 		"consumer_id":   modinfo.ConsumerAppid,
@@ -64,9 +63,9 @@ func (m *ModApi) GetModInfo(ctx *gin.Context) {
 		"description":   modinfo.Description,
 		"file_url":      modinfo.FileUrl,
 		"modid":         modinfo.Modid,
-		"img":           img,
+		"img":           modinfo.Img,
 		"last_time":     modinfo.LastTime,
-		"name":          name,
+		"name":          modinfo.Name,
 		"v":             modinfo.V,
 		"mod_config":    mod_config,
 		"update":        modinfo.Update,
@@ -127,8 +126,6 @@ func (m *ModApi) GetMyModList(ctx *gin.Context) {
 		var mod_config map[string]interface{}
 		_ = json.Unmarshal([]byte(modinfo.ModConfig), &mod_config)
 
-		name, img := modMetaWithFallback(modinfo)
-
 		modData := map[string]interface{}{
 			"auth":          modinfo.Auth,
 			"consumer_id":   modinfo.ConsumerAppid,
@@ -136,9 +133,9 @@ func (m *ModApi) GetMyModList(ctx *gin.Context) {
 			"description":   modinfo.Description,
 			"file_url":      modinfo.FileUrl,
 			"modid":         modinfo.Modid,
-			"img":           img,
+			"img":           modinfo.Img,
 			"last_time":     modinfo.LastTime,
-			"name":          name,
+			"name":          modinfo.Name,
 			"v":             modinfo.V,
 			"mod_config":    mod_config,
 			"update":        modinfo.Update,
@@ -261,7 +258,6 @@ func (m *ModApi) UpdateMod(ctx *gin.Context) {
 	}
 	var mod_config map[string]interface{}
 	json.Unmarshal([]byte(modinfo.ModConfig), &mod_config)
-	name, img := modMetaWithFallback(modinfo)
 	mod := map[string]interface{}{
 		"auth":          modinfo.Auth,
 		"consumer_id":   modinfo.ConsumerAppid,
@@ -269,9 +265,9 @@ func (m *ModApi) UpdateMod(ctx *gin.Context) {
 		"description":   modinfo.Description,
 		"file_url":      modinfo.FileUrl,
 		"modid":         modinfo.Modid,
-		"img":           img,
+		"img":           modinfo.Img,
 		"last_time":     modinfo.LastTime,
-		"name":          name,
+		"name":          modinfo.Name,
 		"v":             modinfo.V,
 		"mod_config":    mod_config,
 		"update":        modinfo.Update,
@@ -440,31 +436,4 @@ func (m *ModApi) DeleteUgcModFile(ctx *gin.Context) {
 		Msg:  "success",
 		Data: nil,
 	})
-}
-
-// modMetaWithFallback 库里缺名字/图标时用本地 modinfo.lua / icon.png 兜底
-func modMetaWithFallback(modinfo model.ModInfo) (name string, img string) {
-	name = modinfo.Name
-	img = modinfo.Img
-	if name == "" || img == "" {
-		localName, iconPath := mod2.LocalModMeta(modinfo.Modid)
-		if name == "" {
-			name = localName
-		}
-		if img == "" && iconPath != "" {
-			img = "/api/mod/icon/" + modinfo.Modid
-		}
-	}
-	return name, img
-}
-
-// GetModIcon 下发模组本地图标（icon.png）
-func (m *ModApi) GetModIcon(ctx *gin.Context) {
-	modId := ctx.Param("modId")
-	p := mod2.LocalModIcon(modId)
-	if p == "" {
-		ctx.Status(http.StatusNotFound)
-		return
-	}
-	ctx.File(p)
 }
