@@ -147,3 +147,4 @@ func (g *GameBackUpApi) BackupSnapshotsList(ctx *gin.Context) {
 		Data: snapshotBackupList,
 	})
 }
+

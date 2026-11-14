@@ -23,4 +23,13 @@ func initBackupRouter(router *gin.RouterGroup) {
 
 	}
 
+	saveApi := api.SaveApi{}
+	save := router.Group("/api/game/save")
+	{
+		save.GET("/list", saveApi.ListSaves)
+		save.GET("/detect", saveApi.DetectSaves)
+		save.POST("/upload-folder", saveApi.UploadFolder)
+		save.POST("/move", saveApi.Move)
+	}
+
 }
