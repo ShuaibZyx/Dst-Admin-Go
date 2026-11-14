@@ -348,6 +348,6 @@ func main() {
 	)
 	if err != nil {
 		fmt.Printf("生成地图时出错: %v\n", err)
-		os.Exit(1)
+		return
 	}
 }
