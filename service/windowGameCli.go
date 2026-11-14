@@ -55,7 +55,25 @@ func (receiver *ClusterContainer) StopLevel(cluster, levelName string) {
 	log.Println("正在停止世界", cluster, levelName)
 	if value := receiver.get(cluster, levelName); value != nil {
 		value.Stop()
+		return
 	}
+	// 面板重启后无控制台句柄（优雅通道已失）：回退按进程停止
+	forceStopLevelPid(cluster, levelName)
+}
+
+// forceStopLevelPid 无句柄时按进程停止世界（无法发 c_shutdown，只能终止进程）
+func forceStopLevelPid(cluster, levelName string) {
+	pid := findLevelPid(cluster, levelName)
+	if pid <= 0 {
+		return
+	}
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return
+	}
+	_ = p.Kill()
+	pidCache.Delete(cluster + "/" + levelName)
+	log.Println("[停止] 无控制台句柄，已强制停止进程 pid:", pid)
 }
 
 func (receiver *ClusterContainer) Send(cluster, levelName, message string) {
@@ -172,7 +190,9 @@ func (receiver *ClusterContainer) CpuUsage(cluster, levelName string) float64 {
 func (receiver *ClusterContainer) Kill(cluster, levelName string) {
 	if value := receiver.get(cluster, levelName); value != nil {
 		value.Kill()
+		return
 	}
+	forceStopLevelPid(cluster, levelName)
 }
 
 func (receiver *ClusterContainer) get(cluster, levelName string) *LevelInstance {
