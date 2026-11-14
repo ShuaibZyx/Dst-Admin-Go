@@ -17,6 +17,7 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 
 	oneClick := api.OneClickInstallApi{}
 	router.GET("/api/dst/install/oneclick", oneClick.Install)
+	router.GET("/api/dst/install/status", oneClick.InstallStatus)
 
 	modsDl := api.ModsDownloadApi{}
 	router.GET("/api/dst/mods/download", modsDl.DownloadCurrent)

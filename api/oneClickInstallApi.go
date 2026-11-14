@@ -236,3 +236,30 @@ func trimSpace(s string) string {
 	}
 	return s
 }
+
+// InstallStatus 组件安装状态：SteamCMD 与专用服务器是否已就位
+func (o *OneClickInstallApi) InstallStatus(ctx *gin.Context) {
+	cfg := dstConfigUtils.GetDstConfig()
+	sc, srv, _ := oneclickTargets(cfg)
+	steamOK := false
+	for _, n := range []string{"steamcmd.exe", "steamcmd.sh", "steamcmd"} {
+		if info, err := os.Stat(filepath.Join(sc, n)); err == nil && !info.IsDir() {
+			steamOK = true
+			break
+		}
+	}
+	serverOK := false
+	for _, b := range []string{"bin", "bin64"} {
+		entries, err := os.ReadDir(filepath.Join(srv, b))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if len(e.Name()) >= 34 && e.Name()[:34] == "dontstarve_dedicated_server_nullrenderer" {
+				serverOK = true
+			}
+		}
+	}
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success",
+		"data": gin.H{"steamcmd": steamOK, "server": serverOK}})
+}
