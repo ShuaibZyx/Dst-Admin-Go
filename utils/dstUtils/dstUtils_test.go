@@ -23,7 +23,7 @@ func TestGetKleiDstPathBetaBranch(t *testing.T) {
 		"parent_path=/P",
 		"beta=1",
 	})
-	want := filepath.Join("/P", "world-beta")
+	want := filepath.Join("/P", "worlds-beta")
 	if got := GetKleiDstPath(); got != want {
 		t.Fatalf("GetKleiDstPath() = %q, want %q", got, want)
 	}
@@ -34,7 +34,7 @@ func TestGetKleiDstPathNonBeta(t *testing.T) {
 		"parent_path=/P",
 		"beta=0",
 	})
-	want := filepath.Join("/P", "world")
+	want := filepath.Join("/P", "worlds")
 	if got := GetKleiDstPath(); got != want {
 		t.Fatalf("GetKleiDstPath() = %q, want %q", got, want)
 	}

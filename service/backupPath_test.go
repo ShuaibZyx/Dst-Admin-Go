@@ -17,7 +17,7 @@ func TestBackupPathResolvesUnderParent(t *testing.T) {
 	restore := dstConfigUtils.SetDstConfigPathForTest(p)
 	t.Cleanup(restore)
 
-	want := filepath.Join(parent, "backup")
+	want := filepath.Join(parent, "backups")
 	if err := os.MkdirAll(want, 0755); err != nil {
 		t.Fatal(err)
 	}

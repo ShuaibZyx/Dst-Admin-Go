@@ -46,8 +46,8 @@ func TestGetClusterResolvesRelativePaths(t *testing.T) {
 	if c.Persistent_storage_root != parent {
 		t.Errorf("Persistent_storage_root = %q, want 根目录本身", c.Persistent_storage_root)
 	}
-	if c.Conf_dir != "world" {
-		t.Errorf("Conf_dir = %q, want world", c.Conf_dir)
+	if c.Conf_dir != "worlds" {
+		t.Errorf("Conf_dir = %q, want worlds", c.Conf_dir)
 	}
 }
 

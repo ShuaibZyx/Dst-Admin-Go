@@ -9,7 +9,7 @@ import (
 
 func TestGetLevelConfigRegistersAllShardDirs(t *testing.T) {
 	parent := t.TempDir()
-	base := filepath.Join(parent, "world", "ROGIA")
+	base := filepath.Join(parent, "worlds", "ROGIA")
 	// 磁盘上四个世界目录（Master/Caves + 两个自定义）
 	for _, name := range []string{"Master", "Caves", "Shipwrecked", "Volcano"} {
 		if err := os.MkdirAll(filepath.Join(base, name), 0755); err != nil {
@@ -20,7 +20,7 @@ func TestGetLevelConfigRegistersAllShardDirs(t *testing.T) {
 		}
 	}
 	p := filepath.Join(t.TempDir(), "dst_config")
-	cfg := "parent_path=" + parent + "\npersistent_storage_root=world\ncluster=ROGIA\nbin=32\nbeta=0\n"
+	cfg := "parent_path=" + parent + "\npersistent_storage_root=worlds\ncluster=ROGIA\nbin=32\nbeta=0\n"
 	if err := os.WriteFile(p, []byte(cfg), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestGetLevelConfigRegistersAllShardDirs(t *testing.T) {
 
 func TestGetLevelConfigTranslatesExistingEnglishNames(t *testing.T) {
 	parent := t.TempDir()
-	base := filepath.Join(parent, "world", "ROGIA")
+	base := filepath.Join(parent, "worlds", "ROGIA")
 	for _, name := range []string{"Shipwrecked", "Volcano"} {
 		if err := os.MkdirAll(filepath.Join(base, name), 0755); err != nil {
 			t.Fatal(err)
@@ -69,7 +69,7 @@ func TestGetLevelConfigTranslatesExistingEnglishNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := filepath.Join(t.TempDir(), "dst_config")
-	cfg := "parent_path=" + parent + "\npersistent_storage_root=world\ncluster=ROGIA\nbin=32\nbeta=0\n"
+	cfg := "parent_path=" + parent + "\npersistent_storage_root=worlds\ncluster=ROGIA\nbin=32\nbeta=0\n"
 	if err := os.WriteFile(p, []byte(cfg), 0644); err != nil {
 		t.Fatal(err)
 	}

@@ -88,9 +88,9 @@ func SetDstConfigPathForTest(p string) func() {
 const (
 	DefaultSteamcmd  = "steamcmd"
 	DefaultServerDir = "dst-dedicated-server"
-	DefaultBackup    = "backup"
-	DefaultMod       = "mod"
-	DefaultWorlds    = "world"
+	DefaultBackup    = "backups"
+	DefaultMod       = "mods"
+	DefaultWorlds    = "worlds"
 )
 
 // SaveDirOf 存档目录名：conf_dir（UI"存档目录"）或默认 world；beta=1 加 -beta 后缀
