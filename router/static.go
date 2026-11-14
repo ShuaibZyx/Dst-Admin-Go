@@ -36,8 +36,9 @@ func initStaticFile(app *gin.Engine) {
 			context.Writer.Header().Set("Cache-Control", "no-cache")
 		}
 	})
-	app.LoadHTMLGlob("dist/index.html") // 添加入口index.html
-	//r.LoadHTMLFiles("dist//*") // 添加资源路径
+	// 注意：不要在此函数前部使用 LoadHTMLGlob 等会 panic 的注册——
+	// dist 缺失时 panic 被上方 recover 吞掉，会导致后续路由全部丢失（/ 404）
+	// 入口 index.html 由下方 StaticFile 原样下发，无需模板引擎
 	app.Static("/assets", "./dist/assets")
 	app.Static("/misc", "./dist/misc")
 	app.Static("/static/js", "./dist/static/js")                         // 添加资源路径
