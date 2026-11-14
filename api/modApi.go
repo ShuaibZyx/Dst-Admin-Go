@@ -249,12 +249,23 @@ func (m *ModApi) UpdateMod(ctx *gin.Context) {
 
 	dstConfig := dstConfigUtils.GetDstConfig()
 	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
-	mod_path := filepath.Join(mod_download_path, "/steamapps/workshop/content/322330/", modId)
-	fileUtils.DeleteDir(mod_path)
+	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", modId)
+	if fileUtils.Exists(mod_path) {
+		if derr := fileUtils.DeleteDir(mod_path); derr != nil {
+			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "旧模组文件删除失败（世界运行中会被占用），请停止世界后重试"})
+			return
+		}
+		if fileUtils.Exists(mod_path) {
+			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "旧模组文件仍存在（被占用），无法更新"})
+			return
+		}
+	}
 
 	modinfo, err, status := mod2.SubscribeModByModId(modId, lang)
 	if err != nil {
-		log.Panicln("模组下载失败", "status: ", status)
+		log.Println("模组更新失败", "status: ", status, "err: ", err)
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "模组更新失败：" + err.Error()})
+		return
 	}
 	var mod_config map[string]interface{}
 	json.Unmarshal([]byte(modinfo.ModConfig), &mod_config)
