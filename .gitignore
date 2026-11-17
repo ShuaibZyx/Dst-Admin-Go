@@ -39,3 +39,7 @@ yarn-error.log*
 session.secret
 *_log
 dst-db/
+.codegraph
+.superpowers
+*.log
+session.secret
