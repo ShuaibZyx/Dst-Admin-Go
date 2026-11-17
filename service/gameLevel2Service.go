@@ -140,6 +140,13 @@ func (g *GameLevel2Service) CreateLevel(clusterName string, level *level.World) 
 	} else {
 		uuid = level.Uuid
 	}
+	// 回填 uuid，保证响应与自动任务拿到真实目录名（此前空 uuid 会原样回传）
+	level.Uuid = uuid
+	// 分片 name 统一取目录名(uuid)：与 Master/Caves 及快捷创建一致，
+	// 避免显示名(可能含中文)写进 server.ini 的 [SHARD] name
+	if level.ServerIni != nil {
+		level.ServerIni.Name = uuid
+	}
 	// cluster := clusterUtils.GetCluster(clusterName)
 	levelFolderPath := filepath.Join(dstUtils.GetClusterBasePath(clusterName), uuid)
 	fileUtils.CreateDirIfNotExists(levelFolderPath)
