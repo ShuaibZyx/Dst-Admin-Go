@@ -364,6 +364,17 @@ def main():
             return False
         return True
 
+    # 任务集/出生点的 desc 在游戏里是函数（按世界枚举注册项），目录固化为各世界的注册候选：
+    # IA 注册 task_set={shipwrecked:海难, volcano:火山}、start_location={shipwrecked_default/plus/darkness, volcano_default}
+    SPECIAL_DESC = {
+        ('shipwrecked', 'task_set'): ({'shipwrecked': '海难'}, {'shipwrecked': 'Tropical'}),
+        ('shipwrecked', 'start_location'): (
+            {'shipwrecked_default': '默认', 'shipwrecked_plus': '丰富资源', 'shipwrecked_darkness': '黑暗'},
+            {'shipwrecked_default': 'Default', 'shipwrecked_plus': 'Plus', 'shipwrecked_darkness': 'Dark'}),
+        ('volcano', 'task_set'): ({'volcano': '火山'}, {'volcano': 'Volcanic'}),
+        ('volcano', 'start_location'): ({'volcano_default': '火山'}, {'volcano_default': 'Volcano'}),
+    }
+
     # 名称解析（zh/en）
     def names_for(key, mod):
         if mod == 'vanilla':
@@ -440,7 +451,11 @@ def main():
                         # 值域
                         dvar = it.get('desc_var')
                         domain = DESCVAR2DOMAIN.get(dvar) or CAT_DOMAIN.get(tab, {}).get(cat_id, 'yesno')
-                        desc = (data or {}).get('desc') or domain_map(lang, domain, world)
+                        sp = SPECIAL_DESC.get((world, key))
+                        if sp:
+                            desc = sp[0] if lang == 'zh' else sp[1]
+                        else:
+                            desc = (data or {}).get('desc') or domain_map(lang, domain, world)
                         value = it['value']
                         if desc and value not in desc:
                             value = list(desc)[0] if desc else value
