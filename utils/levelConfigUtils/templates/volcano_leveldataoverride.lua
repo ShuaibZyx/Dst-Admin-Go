@@ -4,7 +4,7 @@ return {
   desc="岛屿与冒险：火山",
   hideminimap=false,
   id="VOLCANO",
-  location="volcano",
+  location="volcanoworld",
   max_playlist_position=999,
   min_playlist_position=0,
   name="Volcano",

@@ -36,7 +36,8 @@ func (m *ModApi) SearchModList(ctx *gin.Context) {
 
 	data, err := mod2.SearchModList(text, page, size, lang)
 	if err != nil {
-		log.Panicln("搜索mod失败", err)
+		abort500f(ctx, "搜索mod失败", err)
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -52,7 +53,8 @@ func (m *ModApi) GetModInfo(ctx *gin.Context) {
 	lang := ctx.DefaultQuery("lang", "zh")
 	modinfo, err, status := mod2.SubscribeModByModId(moId, lang)
 	if err != nil {
-		log.Panicln("模组下载失败", "status: ", status)
+		abort500f(ctx, "模组下载失败", "status: ", status)
+		return
 	}
 	var mod_config map[string]interface{}
 	_ = json.Unmarshal([]byte(modinfo.ModConfig), &mod_config)
@@ -164,13 +166,20 @@ func (m *ModApi) UpdateAllModInfos(ctx *gin.Context) {
 func (m *ModApi) DeleteMod(ctx *gin.Context) {
 
 	modId := ctx.Param("modId")
+
+	// 先全量清扫模组文件；失败（世界运行中占用等）则整体不动、库记录保留，可重试
+	if err := mod2.RemoveModFiles(modId); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "模组文件删除失败（世界运行中会被占用），请停止世界后重试: " + err.Error()})
+		return
+	}
+	// 摘除 dedicated_server_mods_setup.lua 里的 ServerModSetup 订阅行（该文件只增不减，须显式清）
+	if err := mod2.RemoveModSetupLines(modId); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "订阅行移除失败: " + err.Error()})
+		return
+	}
+
 	db := database.DB
 	db.Where("modid = ?", modId).Delete(&model.ModInfo{})
-
-	dstConfig := dstConfigUtils.GetDstConfig()
-	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
-	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", modId)
-	fileUtils.DeleteDir(mod_path)
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -187,7 +196,8 @@ func (m *ModApi) DeleteSetupWorkshop(ctx *gin.Context) {
 
 	directories, err := fileUtils.ListDirectories(modsPath)
 	if err != nil {
-		log.Panicln("delete dst workshop file error", err)
+		abort500f(ctx, "delete dst workshop file error", err)
+		return
 	}
 	var workshopList []string
 	for _, directory := range directories {
@@ -227,10 +237,14 @@ func (m *ModApi) SaveModInfoFile(ctx *gin.Context) {
 	var modInfos model.ModInfo
 	err := ctx.ShouldBind(&modInfos)
 	if err != nil {
-		log.Panicln("参数解析失败")
+		abort500f(ctx, "参数解析失败")
+		return
 	}
-	db := database.DB
-	db.Save(&modInfos)
+	// 按 modid 幂等写入，避免请求体无 ID 时 Save 变成重复插入
+	if err := mod2.UpsertModInfo(&modInfos); err != nil {
+		abort500f(ctx, "模组信息保存失败", err)
+		return
+	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -244,22 +258,14 @@ func (m *ModApi) UpdateMod(ctx *gin.Context) {
 	modId := ctx.Param("modId")
 	lang := ctx.DefaultQuery("lang", "zh")
 
+	// 先全量清扫旧文件(统一目录/steamcmd 暂存/服务端副本,与 DeleteMod 一致);
+	// 失败则整体不动、库记录保留可重试
+	if err := mod2.RemoveModFiles(modId); err != nil {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "旧模组文件删除失败（世界运行中会被占用），请停止世界后重试: " + err.Error()})
+		return
+	}
 	db := database.DB
 	db.Where("modid = ?", modId).Delete(&model.ModInfo{})
-
-	dstConfig := dstConfigUtils.GetDstConfig()
-	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
-	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", modId)
-	if fileUtils.Exists(mod_path) {
-		if derr := fileUtils.DeleteDir(mod_path); derr != nil {
-			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "旧模组文件删除失败（世界运行中会被占用），请停止世界后重试"})
-			return
-		}
-		if fileUtils.Exists(mod_path) {
-			ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "旧模组文件仍存在（被占用），无法更新"})
-			return
-		}
-	}
 
 	modinfo, err, status := mod2.SubscribeModByModId(modId, lang)
 	if err != nil {
@@ -302,10 +308,12 @@ func (m *ModApi) AddModInfoFile(ctx *gin.Context) {
 	}
 	err := ctx.ShouldBind(&payload)
 	if err != nil {
-		log.Panicln("参数解析失败")
+		abort500f(ctx, "参数解析失败")
+		return
 	}
 	if payload.WorkshopId == "" {
-		log.Panicln("workshopId can not be null")
+		abort500f(ctx, "workshopId can not be null")
+		return
 	}
 
 	// 创建workshop文件
@@ -315,11 +323,13 @@ func (m *ModApi) AddModInfoFile(ctx *gin.Context) {
 
 	err = fileUtils.CreateFileIfNotExists(modinfoPath)
 	if err != nil {
-		log.Panicln("创建 modinfo.lua 失败", modinfoPath, err)
+		abort500f(ctx, "创建 modinfo.lua 失败", modinfoPath, err)
+		return
 	}
 	err = fileUtils.WriterTXT(modinfoPath, payload.Modinfo)
 	if err != nil {
-		log.Panicln("写入 modinfo.lua 失败， path: ", modinfoPath, "error: ", err)
+		abort500f(ctx, "写入 modinfo.lua 失败， path: ", modinfoPath, "error: ", err)
+		return
 	}
 
 	mod2.AddModInfo(lang, payload.WorkshopId)
@@ -374,13 +384,15 @@ func (m *ModApi) GetUgcModAcf(ctx *gin.Context) {
 
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -392,12 +404,14 @@ func (m *ModApi) GetUgcModAcf(ctx *gin.Context) {
 	var result map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 
 	dataList, ok := result["response"].(map[string]interface{})["publishedfiledetails"].([]interface{})
 	if !ok {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	for i := range dataList {
 		workshop := dataList[i].(map[string]interface{})
@@ -438,7 +452,8 @@ func (m *ModApi) DeleteUgcModFile(ctx *gin.Context) {
 	if fileUtils.Exists(modFilePath) {
 		err := fileUtils.DeleteDir(modFilePath)
 		if err != nil {
-			log.Panicln(err)
+			abort500f(ctx, err)
+			return
 		}
 	}
 

@@ -10,6 +10,7 @@ func InitGameRouter(router *gin.RouterGroup) {
 	gameConsoleApi := api.GameConsoleApi{}
 	updateApi := api.GameUpdateApi{}
 	startLogApi := api.StartLogApi{}
+	storageApi := api.StorageApi{}
 	gameConsole := router.Group("/api/game")
 	{
 		gameConsole.GET("/sent/broadcast", gameConsoleApi.SentBroadcast)
@@ -21,6 +22,7 @@ func InitGameRouter(router *gin.RouterGroup) {
 		gameConsole.POST("/master/console", gameConsoleApi.MasterConsole)
 		gameConsole.POST("/caves/console", gameConsoleApi.CavesConsole)
 		gameConsole.GET("/operate/player", gameConsoleApi.OperatePlayer)
+		gameConsole.GET("/storage/summary", storageApi.GetStorageSummary)
 		gameConsole.GET("/backup/restore", gameConsoleApi.RestoreBackup)
 
 		gameConsole.GET("/archive", gameConsoleApi.GetGameArchive)
@@ -56,6 +58,7 @@ func InitGameRouter(router *gin.RouterGroup) {
 		game.GET("/system/info", gameApi.GetSystemInfo)
 		game.GET("/system/info/stream", gameApi.SystemInfoStream)
 		game.GET("/log/stream", gameApi.LogStream)
+		game.GET("/live/stream", gameApi.LiveStream)
 	}
 
 }

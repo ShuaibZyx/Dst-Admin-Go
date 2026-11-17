@@ -6,7 +6,6 @@ import (
 	"dst-admin-go/service"
 	"dst-admin-go/vo"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -87,7 +86,8 @@ func (c *ClusterApi) DeleteCluster(ctx *gin.Context) {
 
 	clusterModel, err := clusterManager.DeleteCluster(uint(id))
 	if err != nil {
-		log.Panicln("delete cluster error", err)
+		abort500f(ctx, "delete cluster error", err)
+		return
 	}
 
 	global.CollectMap.RemoveCollect(clusterModel.ClusterName)

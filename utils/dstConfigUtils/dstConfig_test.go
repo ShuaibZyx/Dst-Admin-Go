@@ -111,3 +111,68 @@ func TestLegacyFileWithoutParentKeys(t *testing.T) {
 		t.Fatalf("Last_parent_path = %q, want empty for legacy file", got.Last_parent_path)
 	}
 }
+
+// 配置读取必须带缓存(mtime 失效):之前每请求重读磁盘+逐行解析,
+// 所有接口被文件 IO 放大到 300-400ms 平均耗时(实测日志)。
+func TestGetDstConfigCachedUntilFileChanges(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "dst_config")
+	if err := os.WriteFile(p, []byte("parent_path=/a\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	restore := SetDstConfigPathForTest(p)
+	defer restore()
+
+	if got := GetDstConfig(); got.Parent_path != "/a" {
+		t.Fatalf("Parent_path = %q, want /a", got.Parent_path)
+	}
+
+	// 写新内容但把 mtime 改回原值:缓存命中应返回旧值(证明没有每次读盘)
+	fi, _ := os.Stat(p)
+	old := fi.ModTime()
+	if err := os.WriteFile(p, []byte("parent_path=/b\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetDstConfig(); got.Parent_path != "/a" {
+		t.Fatalf("mtime 未变应命中缓存, got %q", got.Parent_path)
+	}
+
+	// mtime 变化后必须重读
+	if err := os.WriteFile(p, []byte("parent_path=/c\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetDstConfig(); got.Parent_path != "/c" {
+		t.Fatalf("文件变化后应重读, got %q", got.Parent_path)
+	}
+}
+
+// dst_config 解析:①值含 = 号不得截断;②key 必须精确匹配(offline_cluster= 不得污染 cluster=)。
+func TestGetDstConfig_ParseExactKeys(t *testing.T) {
+	tmp := t.TempDir()
+	old, _ := os.Getwd()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+
+	content := "parent_path=/opt/a=b\ncluster=ROGIA\noffline_cluster=true\nbackup=backups\nbin=64\n"
+	if err := os.WriteFile(filepath.Join(tmp, "dst_config"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := GetDstConfig()
+	if cfg.Parent_path != "/opt/a=b" {
+		t.Errorf("值含 = 不能截断: Parent_path=%q", cfg.Parent_path)
+	}
+	if cfg.Cluster != "ROGIA" {
+		t.Errorf("cluster 不得被 offline_cluster 覆盖: Cluster=%q", cfg.Cluster)
+	}
+	if cfg.Backup != "backups" {
+		t.Errorf("Backup 解析错误: %q", cfg.Backup)
+	}
+	if cfg.Bin != 64 {
+		t.Errorf("Bin 解析错误: %d", cfg.Bin)
+	}
+}

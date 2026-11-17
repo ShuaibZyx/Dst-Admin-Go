@@ -49,7 +49,8 @@ func (g *GameConsoleApi) UpdateGame(ctx *gin.Context) {
 
 	err := gameService.UpdateGame(clusterName)
 	if err != nil {
-		log.Panicln("更新游戏失败: ", err)
+		abort500f(ctx, "更新游戏失败: ", err)
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -156,7 +157,8 @@ func (g *GameConsoleApi) RollBack(ctx *gin.Context) {
 	dayNums := ctx.Query("dayNums")
 	days, err := strconv.Atoi(dayNums)
 	if err != nil {
-		log.Panicln("参数解析错误：" + dayNums)
+		abort500f(ctx, "参数解析错误："+dayNums)
+		return
 	}
 	log.Println("回滚指定的天数：" + dayNums)
 
@@ -236,7 +238,8 @@ func (g *GameConsoleApi) CleanLevel(ctx *gin.Context) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Panicln("删除世界存档失败", r)
+			abort500f(ctx, "删除世界存档失败", r)
+			return
 		}
 	}()
 
@@ -404,7 +407,8 @@ func (g *GameConsoleApi) ReadLevelServeLog(ctx *gin.Context) {
 	lines, _ := strconv.Atoi(ctx.DefaultQuery("lines", "100"))
 	levelName := ctx.Query("levelName")
 	if levelName == "" {
-		log.Panicln("levelName 不能为空")
+		abort500f(ctx, "levelName 不能为空")
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -422,7 +426,8 @@ func (g *GameConsoleApi) ReadLevelServeChatLog(ctx *gin.Context) {
 	lines, _ := strconv.Atoi(ctx.DefaultQuery("lines", "100"))
 	levelName := ctx.Query("levelName")
 	if levelName == "" {
-		log.Panicln("levelName 不能为空")
+		abort500f(ctx, "levelName 不能为空")
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -437,7 +442,8 @@ func (g *GameConsoleApi) ReadServerLog(ctx *gin.Context) {
 	lines, _ := strconv.Atoi(ctx.DefaultQuery("lines", "100"))
 	logs, err := fileUtils.ReverseRead("./log.log", uint(lines))
 	if err != nil {
-		log.Panicln("读取面板日志失败")
+		abort500f(ctx, "读取面板日志失败")
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -486,7 +492,8 @@ func (g *GameConsoleApi) DownloadServerLogFile(ctx *gin.Context) {
 	_, err := os.Open(filePath)
 	//非空处理
 	if err != nil {
-		log.Panicln("download filePath error", err)
+		abort500f(ctx, "download filePath error", err)
+		return
 	}
 	ctx.Header("Content-Type", "application/octet-stream")
 	ctx.Header("Content-Disposition", "attachment; filename="+"log.log")

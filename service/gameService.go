@@ -135,7 +135,7 @@ func (g *GameService) RewriteModSetup(clusterName string) {
 func (g *GameService) UpdateGame(clusterName string) error {
 
 	dstConfig := dstConfigUtils.GetDstConfig()
-	if dstConfig.Bin == 2664 {
+	if dstConfig.Bin == consts.BinBox64 {
 		return g.updateDepotDownloader()
 	}
 
@@ -274,16 +274,20 @@ func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
 	dstInstallDir = dstUtils.EscapePath(dstInstallDir)
 	log.Println(dstInstallDir)
 
-	if bin == 64 {
-		startCmd = "cd " + dstInstallDir + "/bin64 ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
-	} else if bin == 100 {
-		startCmd = "cd " + dstInstallDir + "/bin64 ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64_luajit -console -cluster " + clusterName + " -shard " + level
-	} else if bin == 86 {
-		startCmd = "cd " + dstInstallDir + "/bin64 ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box86 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
-	} else if bin == 2664 {
-		startCmd = "cd " + dstInstallDir + "/bin64 ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box64 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+	if runtime.GOOS == "darwin" {
+		// macOS:Klei 只提供 bin/dontstarve_dedicated_server_nullrenderer(64 位 Mach-O,
+		// Apple Silicon 走 Rosetta),无 bin64/box86/box64 目录与变体,统一走 bin 分支
+		startCmd = "cd \"" + dstInstallDir + "/bin\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + clusterName + " -shard " + level
+	} else if bin == consts.BinX64 {
+		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+	} else if bin == consts.BinLuaJIT {
+		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64_luajit -console -cluster " + clusterName + " -shard " + level
+	} else if bin == consts.BinBox86 {
+		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box86 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+	} else if bin == consts.BinBox64 {
+		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box64 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
 	} else {
-		startCmd = "cd " + dstInstallDir + "/bin ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd \"" + dstInstallDir + "/bin\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + clusterName + " -shard " + level
 	}
 
 	if ugcDirectory != "" {
@@ -467,6 +471,7 @@ func (g *GameService) PsAuxSpecified(clusterName, level string) *vo.DstPsVo {
 		psVo := vo.NewDstPsVo()
 		psVo.RSS = fmt.Sprintf("%f", memUsage*1024)
 		psVo.CpuUage = fmt.Sprintf("%f", cpuUsage)
+		psVo.Elapsed = clusterContainer.Elapsed(clusterName, level)
 		return psVo
 	}
 	dstPsVo := vo.NewDstPsVo()
@@ -497,11 +502,12 @@ type SystemInfo struct {
 	DiskInfo      *systemUtils.DiskInfo `json:"disk"`
 	PanelMemUsage uint64                `json:"panelMemUsage"`
 	PanelCpuUsage float64               `json:"panelCpuUsage"`
+	GpuInfo       GpuInfo               `json:"gpu"`
 }
 
 func (g *GameService) GetSystemInfo(clusterName string) *SystemInfo {
 	var wg sync.WaitGroup
-	wg.Add(5)
+	wg.Add(6)
 
 	dashboardVO := SystemInfo{}
 	go func() {
@@ -554,6 +560,16 @@ func (g *GameService) GetSystemInfo(clusterName string) *SystemInfo {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 		dashboardVO.PanelMemUsage = m.Alloc / 1024 // 将字节转换为MB
+	}()
+
+	go func() {
+		defer func() {
+			wg.Done()
+			if r := recover(); r != nil {
+				log.Println(r)
+			}
+		}()
+		dashboardVO.GpuInfo = GetGpuInfo()
 
 		// 获取当前程序使用的CPU信息
 		//startCPU, _ := cpu.Percent(time.Second, false)

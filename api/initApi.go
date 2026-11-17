@@ -5,7 +5,6 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/vo"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,13 +19,15 @@ func (f *InitApi) InitFirst(ctx *gin.Context) {
 
 	exist := fileUtils.Exists(first)
 	if exist {
-		log.Panicln("非法请求")
+		abort500f(ctx, "非法请求")
+		return
 	}
 
 	initData := &service.InitDstData{}
 	err := ctx.ShouldBind(initData)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 
 	initEvnService.InitDstEnv(initData, ctx)

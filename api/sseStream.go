@@ -1,14 +1,13 @@
 package api
 
 import (
+	"dst-admin-go/service"
 	"dst-admin-go/utils/fileUtils"
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -46,96 +45,35 @@ func (g *GameConsoleApi) LogStream(ctx *gin.Context) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal levelName"})
 		return
 	}
-	if !fileUtils.ValidName(levelName) { // F1: 防路径穿越
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal levelName"})
-		return
-	}
-	if !fileUtils.ValidName(levelName) { // F1: 防路径穿越
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: "illegal levelName"})
-		return
-	}
 	logPath := filepath.Join(dstUtils.GetClusterBasePath(cluster.ClusterName), levelName, "server_log.txt")
+
+	// fsnotify 事件驱动（共享 watcher + 多连接广播）：写入即推（0 延迟），
+	// 替代原来每条连接各自的 2 秒轮询 stat+read
+	sess := service.LogSessionFor(logPath)
+	backlog, ch, unsub := sess.Attach()
+	defer unsub()
 
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
 
-	var offset int64 = -1 // -1 表示首次：从尾部 2KB 开始，只推新增
-	ctx.Stream(func(w io.Writer) bool {
-		fi, err := os.Stat(logPath)
-		if err != nil {
-			time.Sleep(3 * time.Second)
-			return true
-		}
-		if offset < 0 {
-			offset = fi.Size()
-			if offset > 2048 {
-				offset -= 2048
-			}
-			// 跳过半个行，避免开头截断
-			if offset > 0 {
-				offset = alignToLine(logPath, offset)
-			}
-		}
-		if fi.Size() < offset { // F3: 日志被截断/轮转时回退重读
-			offset = 0
-		}
-		if fi.Size() < offset { // F3: 日志被截断/轮转时回退重读
-			offset = 0
-		}
-		if fi.Size() < offset { // F3: 日志被截断/轮转时回退重读
-			offset = 0
-		}
-		if fi.Size() > offset {
-			f, err := os.Open(logPath)
-			if err == nil {
-				_, _ = f.Seek(offset, io.SeekStart)
-				sc := bufio.NewScanner(f)
-				for sc.Scan() {
-					line := sc.Text()
-					if line != "" {
-						fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
-					}
-					offset, _ = f.Seek(0, io.SeekCurrent)
-				}
-				// scanner 缓冲可能未读到 EOF 处，offset 用文件当前消费位置
-				pos, _ := f.Seek(0, io.SeekCurrent)
-				if pos > offset {
-					offset = pos
-				}
-				_ = f.Close()
-			}
-		}
-		time.Sleep(2 * time.Second)
-		return true
-	})
-}
-
-// alignToLine 从给定偏移向前找到行首（避免推送半行）
-func alignToLine(path string, offset int64) int64 {
-	f, err := os.Open(path)
-	if err != nil {
-		return offset
+	// 首连推尾部 2KB 行（backlog 由 watcher 从启动起累积；此处兜底保证首屏有上下文）
+	for _, line := range backlog[len(backlog)-min(len(backlog), 40):] {
+		_, _ = fmt.Fprintf(ctx.Writer, "event: log\ndata: %s\n\n", line)
 	}
-	defer f.Close()
-	if _, err := f.Seek(offset, io.SeekStart); err != nil {
-		return offset
+	ctx.Writer.Flush()
+	for {
+		select {
+		case line, ok := <-ch:
+			if !ok {
+				return
+			}
+			_, _ = fmt.Fprintf(ctx.Writer, "event: log\ndata: %s\n\n", line)
+			ctx.Writer.Flush()
+		case <-ctx.Request.Context().Done():
+			return
+		}
 	}
-	buf := make([]byte, 1)
-	pos := offset
-	for pos > 0 {
-		if _, err := f.Seek(pos-1, io.SeekStart); err != nil {
-			break
-		}
-		if _, err := f.Read(buf); err != nil {
-			break
-		}
-		if buf[0] == '\n' {
-			return pos
-		}
-		pos--
-	}
-	return pos
 }
 
 var _ = log.Println

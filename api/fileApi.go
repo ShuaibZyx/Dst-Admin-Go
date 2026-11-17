@@ -1,14 +1,15 @@
 package api
 
 import (
-	"strings"
 	"dst-admin-go/utils/dstConfigUtils"
+	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 )
 
 type FileApi struct {
@@ -17,18 +18,14 @@ type FileApi struct {
 func (d *FileApi) UploadUgcMods(ctx *gin.Context) {
 	form, err := ctx.MultipartForm()
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	files := form.File["files"]
 	filePaths := form.Value["filePaths"]
 
 	dstConfig := dstConfigUtils.GetDstConfig()
-	ugcModPath := ""
-	if dstConfig.Ugc_directory != "" {
-		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Ugc_directory, ""), "content", "322330")
-	} else {
-		ugcModPath = filepath.Join(dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Force_install_dir, dstConfigUtils.DefaultServerDir), "ugc_mods", dstConfig.Cluster, "Master", "content", "322330")
-	}
+	ugcModPath := dstUtils.GetUgcWorkshopModPath(dstConfig.Cluster, "Master", "")
 
 	log.Println("上传ugc模组路径 ", ugcModPath)
 	if len(files) != len(filePaths) {
@@ -45,7 +42,8 @@ func (d *FileApi) UploadUgcMods(ctx *gin.Context) {
 		p := filepath.Join(ugcModPath, filepath.Dir(filePaths[i]), file.Filename)
 		log.Println(p)
 		if err := ctx.SaveUploadedFile(file, p); err != nil {
-			log.Panicln(err)
+			abort500f(ctx, err)
+			return
 		}
 	}
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -65,7 +63,8 @@ func (d *FileApi) GetBackground(ctx *gin.Context) {
 func (d *FileApi) UploadBackground(ctx *gin.Context) {
 	form, err := ctx.MultipartForm()
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	files := form.File["file"]
 	dir := "./dist/assets"
@@ -74,7 +73,8 @@ func (d *FileApi) UploadBackground(ctx *gin.Context) {
 		p := filepath.Join("./dist/assets/background.png")
 		log.Println(p)
 		if err := ctx.SaveUploadedFile(file, p); err != nil {
-			log.Panicln(err)
+			abort500f(ctx, err)
+			return
 		}
 	}
 	ctx.JSON(http.StatusOK, vo.Response{

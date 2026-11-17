@@ -15,6 +15,7 @@ import (
 	"dst-admin-go/utils/shellUtils"
 	"dst-admin-go/vo"
 	"dst-admin-go/vo/level"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 var gameLevel2Service = service.GameLevel2Service{}
@@ -50,9 +52,8 @@ type LevelInfo struct {
 }
 
 // GetStatus 获取世界状态
-func (g *GameLevel2Api) GetStatus(ctx *gin.Context) {
-	cluster := clusterUtils.GetClusterFromGin(ctx)
-	clusterName := cluster.ClusterName
+// queryLevelsStatus 查询全部世界状态(GetStatus 与状态推送流共用)
+func queryLevelsStatus(clusterName string) []LevelInfo {
 	levelList := gameLevel2Service.GetLevelList(clusterName)
 	length := len(levelList)
 	result := make([]LevelInfo, length)
@@ -85,62 +86,116 @@ func (g *GameLevel2Api) GetStatus(ctx *gin.Context) {
 			}(i)
 		}
 		wg.Wait()
-		ctx.JSON(http.StatusOK, vo.Response{
-			Code: 200,
-			Msg:  "success",
-			Data: result,
-		})
-	} else {
-		for i := range levelList {
-			world := levelList[i]
-			result[i] = LevelInfo{
-				Ps:                &vo.DstPsVo{},
-				Status:            false,
-				LevelName:         world.LevelName,
-				IsMaster:          world.IsMaster,
-				Uuid:              world.Uuid,
-				Leveldataoverride: world.Leveldataoverride,
-				Modoverrides:      world.Modoverrides,
-				ServerIni:         world.ServerIni,
-			}
+		return result
+	}
+	for i := range levelList {
+		world := levelList[i]
+		result[i] = LevelInfo{
+			Ps:                &vo.DstPsVo{},
+			Status:            false,
+			LevelName:         world.LevelName,
+			IsMaster:          world.IsMaster,
+			Uuid:              world.Uuid,
+			Leveldataoverride: world.Leveldataoverride,
+			Modoverrides:      world.Modoverrides,
+			ServerIni:         world.ServerIni,
 		}
-
-		cmd := "ps -aux | grep -v grep | grep -v tail | grep -v SCREEN | grep " + clusterName + " |awk '{print $3, $4, $5, $6,$16}'"
-		info, err := shellUtils.Shell(cmd)
-		if err != nil {
-			log.Println(cmd + " error: " + err.Error())
-		} else {
-			lines := strings.Split(info, "\n")
-			for lineIndex := range lines {
-				dstPsVo := vo.NewDstPsVo()
-				arr := strings.Split(lines[lineIndex], " ")
-				//for i := range arr {
-				//	log.Println(i, arr[i])
-				//}
-				if len(arr) > 4 {
-					dstPsVo.CpuUage = strings.Replace(arr[0], "\n", "", -1)
-					dstPsVo.MemUage = strings.Replace(arr[1], "\n", "", -1)
-					dstPsVo.VSZ = strings.Replace(arr[2], "\n", "", -1)
-					dstPsVo.RSS = strings.Replace(arr[3], "\n", "", -1)
-					for i := range result {
-						levelName := result[i].Uuid
-						if strings.Contains(arr[4], levelName) {
-							result[i].Ps = dstPsVo
-							result[i].Status = true
-						}
-					}
-				}
-
-			}
-		}
-
-		ctx.JSON(http.StatusOK, vo.Response{
-			Code: 200,
-			Msg:  "success",
-			Data: result,
-		})
 	}
 
+	cmd := "ps -aux | grep -v grep | grep -v tail | grep -v SCREEN | grep " + clusterName + " |awk '{print $3, $4, $5, $6,$16}'"
+	info, err := shellUtils.Shell(cmd)
+	if err != nil {
+		log.Println(cmd + " error: " + err.Error())
+		return result
+	}
+	lines := strings.Split(info, "\n")
+	for lineIndex := range lines {
+		dstPsVo := vo.NewDstPsVo()
+		arr := strings.Split(lines[lineIndex], " ")
+		//for i := range arr {
+		//	log.Println(i, arr[i])
+		//}
+		if len(arr) > 4 {
+			dstPsVo.CpuUage = strings.Replace(arr[0], "\n", "", -1)
+			dstPsVo.MemUage = strings.Replace(arr[1], "\n", "", -1)
+			dstPsVo.VSZ = strings.Replace(arr[2], "\n", "", -1)
+			dstPsVo.RSS = strings.Replace(arr[3], "\n", "", -1)
+			for i := range result {
+				levelName := result[i].Uuid
+				if strings.Contains(arr[4], levelName) {
+					result[i].Ps = dstPsVo
+					result[i].Status = true
+				}
+			}
+		}
+
+	}
+	return result
+}
+
+func (g *GameLevel2Api) GetStatus(ctx *gin.Context) {
+	cluster := clusterUtils.GetClusterFromGin(ctx)
+	ctx.JSON(http.StatusOK, vo.Response{
+		Code: 200,
+		Msg:  "success",
+		Data: queryLevelsStatus(cluster.ClusterName),
+	})
+}
+
+// statusStreams 按集群独立的状态推送会话（不同集群不共享广播）
+var statusStreams sync.Map
+
+func statusStreamFor(clusterName string) *service.LiveSession {
+	if v, ok := statusStreams.Load(clusterName); ok {
+		return v.(*service.LiveSession)
+	}
+	s := service.NewLiveSession()
+	s.Start(func(send func(string)) {
+		// 常驻推送：2 秒采样一次，但同载荷去重（无变化不推）——
+		// 状态帧含各层 Lua 全文约 20KB，重复心跳纯浪费且挤前端渲染
+		cs := &service.ChangeSender{}
+		for {
+			b, _ := json.Marshal(queryLevelsStatus(clusterName))
+			if cs.ShouldPush(string(b)) {
+				send(string(b))
+			}
+			time.Sleep(2 * time.Second)
+		}
+	})
+	actual, _ := statusStreams.LoadOrStore(clusterName, s)
+	return actual.(*service.LiveSession)
+}
+
+// StatusStream GET /api/game/8level/status/stream — SSE：世界状态推送
+// cluster 优先取 query（EventSource 发不了自定义 Header），缺省回落 Header/默认集群
+func (g *GameLevel2Api) StatusStream(ctx *gin.Context) {
+	clusterName := ctx.Query("cluster")
+	if clusterName == "" {
+		clusterName = clusterUtils.GetClusterFromGin(ctx).ClusterName
+	}
+	s := statusStreamFor(clusterName)
+	backlog, ch, _ := s.Attach()
+
+	ctx.Header("Content-Type", "text/event-stream")
+	ctx.Header("Cache-Control", "no-cache")
+	ctx.Header("Connection", "keep-alive")
+
+	for _, line := range backlog {
+		_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", line)
+	}
+	ctx.Writer.Flush()
+	for {
+		select {
+		case line, ok := <-ch:
+			if !ok {
+				return
+			}
+			_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", line)
+			ctx.Writer.Flush()
+		case <-ctx.Request.Context().Done():
+			return
+		}
+	}
 }
 
 func startBefore(ctx *gin.Context) {
@@ -225,19 +280,32 @@ func (g *GameLevel2Api) Start(ctx *gin.Context) {
 	beta := cluster.Beta
 	clusterName := cluster.ClusterName
 
-	// 闸门:海难/火山世界须已订阅 IA 模组才能拉起
+	// 同世界防重入：启动/停止中拒绝新操作（异步化后必须互斥，否则停/拉交叉打架）
+	opKey := clusterName + "/" + levelName
+	if !beginLevelOp(opKey, "start") {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 409, Msg: levelName + " 正在启动/停止中，请稍候"})
+		return
+	}
+
+	// 闸门同步快失败（拒绝即释放）；重活（停旧+拉起，含 3 秒停等）后台执行，API 秒回
+	service.StartLog.Progress(2, "准备启动 %s", levelName)
 	if err := mod.CheckIAWorldStart(clusterName, levelName); err != nil {
+		endLevelOp(opKey)
 		service.StartLog.Logf("启动被拒 %s/%s: %s", clusterName, levelName, err)
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
-
 	startBefore(ctx)
 	if ctx.IsAborted() {
+		endLevelOp(opKey)
 		return
 	}
+	service.StartLog.Progress(4, "配置检查通过 %s", levelName)
 
-	gameService.StartLevel(clusterName, levelName, bin, beta)
+	go func() {
+		defer endLevelOp(opKey)
+		gameService.StartLevel(clusterName, levelName, bin, beta)
+	}()
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -252,7 +320,17 @@ func (g *GameLevel2Api) Stop(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 
-	gameService.StopLevel(clusterName, levelName)
+	opKey := clusterName + "/" + levelName
+	if !beginLevelOp(opKey, "stop") {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 409, Msg: levelName + " 正在启动/停止中，请稍候"})
+		return
+	}
+	service.StartLog.Progress(30, "正在停止 %s", levelName)
+	go func() {
+		defer endLevelOp(opKey)
+		gameService.StopLevel(clusterName, levelName)
+		service.StartLog.Progress(100, "%s 已停止", levelName)
+	}()
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -270,16 +348,29 @@ func (g *GameLevel2Api) StartAll(ctx *gin.Context) {
 	}
 	clusterName := cluster.ClusterName
 
+	opKey := clusterName + "/*"
+	if !beginLevelOp(opKey, "startAll") {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 409, Msg: "一键启动/停止进行中，请稍候"})
+		return
+	}
+
+	service.StartLog.Progress(2, "准备一键启动全部世界")
+
 	// 闸门:任一 IA 世界未订阅 IA 模组则拒绝一键启动（与单世界启动一致）
 	for _, w := range gameLevel2Service.GetLevelList(clusterName) {
 		if err := mod.CheckIAWorldStart(clusterName, w.Uuid); err != nil {
+			endLevelOp(opKey)
 			service.StartLog.Logf("一键启动被拒 %s/%s: %s", clusterName, w.Uuid, err)
 			ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 			return
 		}
 	}
 
-	gameService.StartGame(clusterName)
+	service.StartLog.Progress(4, "配置检查通过, 逐个拉起世界")
+	go func() {
+		defer endLevelOp(opKey)
+		gameService.StartGame(clusterName)
+	}()
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -293,7 +384,17 @@ func (g *GameLevel2Api) StopAll(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 
-	gameService.StopGame(clusterName)
+	opKey := clusterName + "/*"
+	if !beginLevelOp(opKey, "stopAll") {
+		ctx.JSON(http.StatusOK, vo.Response{Code: 409, Msg: "一键启动/停止进行中，请稍候"})
+		return
+	}
+	service.StartLog.Progress(30, "正在停止全部世界")
+	go func() {
+		defer endLevelOp(opKey)
+		gameService.StopGame(clusterName)
+		service.StartLog.Progress(100, "全部世界已停止")
+	}()
 
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -326,7 +427,8 @@ func (g *GameLevel2Api) SaveClusterIni(ctx *gin.Context) {
 	clusterIni := ClusterIni{}
 	err := ctx.ShouldBind(&clusterIni)
 	if err != nil {
-		log.Panicln("参数解析错误", err)
+		abort500f(ctx, "参数解析错误", err)
+		return
 	}
 	homeService.SaveClusterIni(clusterName, clusterIni.Cluster)
 	homeService.SaveClusterToken(clusterName, clusterIni.Token)
@@ -345,7 +447,8 @@ func (g *GameLevel2Api) SendCommand(ctx *gin.Context) {
 	}
 	err := ctx.ShouldBind(&payload)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
@@ -363,7 +466,7 @@ func (g *GameLevel2Api) GetAllOnlinePlayers(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 
-	playerList := playerService.GetPlayerList(clusterName, "#ALL_LEVEL")
+	playerList := playerListWithTimeout(clusterName, "#ALL_LEVEL")
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
 		Msg:  "success",
@@ -377,7 +480,7 @@ func (g *GameLevel2Api) GetOnlinePlayers(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	clusterName := cluster.ClusterName
 
-	playerList := playerService.GetPlayerList(clusterName, levelName)
+	playerList := playerListWithTimeout(clusterName, levelName)
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
 		Msg:  "success",
@@ -428,7 +531,8 @@ func (g *GameLevel2Api) SaveBlacklist(ctx *gin.Context) {
 	blacklistVO := vo.NewBlacklistVO()
 	err := ctx.BindJSON(blacklistVO)
 	if err != nil {
-		log.Panicln("参数解析错误")
+		abort500f(ctx, "参数解析错误")
+		return
 	}
 
 	playerService.SaveBlacklist(clusterName, blacklistVO.Blacklist)
@@ -446,7 +550,8 @@ func (g *GameLevel2Api) SaveWhitelist(ctx *gin.Context) {
 	whitelist := vo.NewWhitelistVO()
 	err := ctx.BindJSON(whitelist)
 	if err != nil {
-		log.Panicln("参数解析错误")
+		abort500f(ctx, "参数解析错误")
+		return
 	}
 	playerService.SaveWhitelist(clusterName, whitelist.Whitelist)
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -463,7 +568,8 @@ func (g *GameLevel2Api) SaveAdminlist(ctx *gin.Context) {
 	adminlist := vo.NewAdminListVO()
 	err := ctx.BindJSON(adminlist)
 	if err != nil {
-		log.Panicln("参数解析错误")
+		abort500f(ctx, "参数解析错误")
+		return
 	}
 
 	playerService.SaveAdminlist(clusterName, adminlist.AdminList)
@@ -493,7 +599,8 @@ func (g *GameLevel2Api) SaveLevelsList(ctx *gin.Context) {
 	}
 	err := ctx.ShouldBind(&body)
 	if err != nil {
-		log.Panicln("参数解析错误", err)
+		abort500f(ctx, "参数解析错误", err)
+		return
 	}
 
 	// 闸门:海难/火山是 IA 模组世界,世界选项必须建立在已订阅基础上
@@ -506,7 +613,8 @@ func (g *GameLevel2Api) SaveLevelsList(ctx *gin.Context) {
 
 	err = gameLevel2Service.UpdateLevels(clusterName, body.Levels)
 	if err != nil {
-		log.Panicln("更新世界配置失败", err)
+		abort500f(ctx, "更新世界配置失败", err)
+		return
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -523,7 +631,8 @@ func (g *GameLevel2Api) DeleteLevel(ctx *gin.Context) {
 
 	err := gameLevel2Service.DeleteLevel(clusterName, levelName)
 	if err != nil {
-		log.Panicln("删除世界失败", err)
+		abort500f(ctx, "删除世界失败", err)
+		return
 	}
 
 	autoCheck.Manager.DeleteAutoCheck(levelName)
@@ -541,7 +650,8 @@ func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 	newLevel := &level.World{}
 	err := ctx.ShouldBind(newLevel)
 	if err != nil {
-		log.Panicln("参数解析错误", err)
+		abort500f(ctx, "参数解析错误", err)
+		return
 	}
 
 	// 闸门:海难/火山是 IA 模组世界,模组未订阅/下载则世界无法加载
@@ -552,7 +662,8 @@ func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 
 	err = gameLevel2Service.CreateLevel(clusterName, newLevel)
 	if err != nil {
-		log.Panicln("创建世界失败", err)
+		abort500f(ctx, "创建世界失败", err)
+		return
 	}
 
 	autoCheck.Manager.AddAutoCheckTasks(model.AutoCheck{
@@ -583,7 +694,8 @@ func (g *GameLevel2Api) CreateNewLevel(ctx *gin.Context) {
 func (g *GameLevel2Api) GetScanUDPPorts(ctx *gin.Context) {
 	ports, err := findFreeUDPPorts(10998, 11038)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,

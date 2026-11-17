@@ -68,6 +68,12 @@ func dirExists(p string) bool {
 	return err == nil && info.IsDir()
 }
 
+// modDirComplete 目录存在且含 modinfo.lua 才算完整可用（与 VerifyClusterMods 的 ok 判定一致）。
+// 修复/下载侧必须用同一标准跳过，否则损坏模组永远假装修好、校验永远报修。
+func modDirComplete(dir string) bool {
+	return dirExists(dir) && fileExists(filepath.Join(dir, "modinfo.lua"))
+}
+
 func fileExists(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()

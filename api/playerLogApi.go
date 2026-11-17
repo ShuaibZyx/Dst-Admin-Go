@@ -5,7 +5,6 @@ import (
 	"dst-admin-go/model"
 	"dst-admin-go/vo"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -98,7 +97,8 @@ func (l *PlayerLogApi) DeletePlayerLog(ctx *gin.Context) {
 
 	err := ctx.ShouldBind(&payload)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	db := database.DB
 

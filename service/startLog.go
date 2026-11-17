@@ -17,6 +17,24 @@ type EventLog struct {
 
 var StartLog = NewEventLog(500)
 
+// progressLine 生成带进度前缀的打点行(经 Logf 会再加时间戳;前端按 [进度:NN%] 子串解析)。
+// 启动/停止过程的进度条数据源。
+func progressLine(percent int, text string) string {
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	return fmt.Sprintf("[进度:%d%%] %s", percent, text)
+}
+
+// Progress 记一条进度打点(前端进度条数据源)。
+// 必须 "%s" 包装:进度行含 "%]",直接当 format 会被 Logf 的 Sprintf 当动词污染。
+func (e *EventLog) Progress(percent int, format string, args ...interface{}) {
+	e.Logf("%s", progressLine(percent, fmt.Sprintf(format, args...)))
+}
+
 func NewEventLog(capacity int) *EventLog {
 	return &EventLog{subs: map[chan string]struct{}{}, cap: capacity}
 }

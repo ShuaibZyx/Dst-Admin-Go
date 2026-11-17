@@ -4,11 +4,110 @@ import (
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/systemUtils"
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
+
+// 目录默认值（旧单数写法由 legacyAlias 在读取时归一）
+const (
+	DefaultSteamcmd  = "steamcmd"
+	DefaultServerDir = "dst-dedicated-server"
+	DefaultMod       = "mods"
+	DefaultBackup    = "backups"
+	DefaultWorlds    = "worlds"
+)
+
+var dst_config_path = "./dst_config"
+
+// SetDstConfigPathForTest 测试用：替换 dst_config 路径，返回恢复函数
+func SetDstConfigPathForTest(p string) func() {
+	old := dst_config_path
+	dst_config_path = p
+	return func() { dst_config_path = old }
+}
+
+// DstConfig 面板根配置（./dst_config，key=value 行式）
+type DstConfig struct {
+	Parent_path             string `json:"parent_path"`
+	Last_parent_path        string `json:"last_parent_path"`
+	Steamcmd                string `json:"steamcmd"`
+	Force_install_dir       string `json:"force_install_dir"`
+	Conf_dir                string `json:"conf_dir"`
+	Persistent_storage_root string `json:"persistent_storage_root"`
+	Cluster                 string `json:"cluster"`
+	Backup                  string `json:"backup"`
+	Mod_download_path       string `json:"mod_download_path"`
+	Bin                     int    `json:"bin"`
+	Beta                    int    `json:"beta"`
+}
+
+// legacyAlias 旧单数默认值 → 复数（旧配置残留值在读取时归一，避免继续写单数目录）
+var legacyAlias = map[string]string{
+	"backup": "backups",
+	"mod":    "mods",
+	"world":  "worlds",
+}
+
+// NormalizeAlias 旧单数目录别名归一（mod→mods 等）
+func NormalizeAlias(p string) string {
+	if v, ok := legacyAlias[p]; ok {
+		return v
+	}
+	return p
+}
+
+// toRel 把绝对路径/家目录前缀剥成相对段（一切输入强制落在父级文件夹下）
+func toRel(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.TrimPrefix(p, "~/")
+	p = strings.TrimPrefix(p, "~"+string(os.PathSeparator))
+	if len(p) >= 2 && p[1] == ':' {
+		p = p[2:]
+	}
+	p = strings.TrimPrefix(p, string(os.PathSeparator))
+	p = strings.TrimPrefix(p, "/")
+	return p
+}
+
+// ResolvePath 拼接父级与子路径：空值取默认，别名归一，绝对路径剥成相对
+func ResolvePath(parent, p, def string) string {
+	if parent == "" {
+		return ""
+	}
+	if p == "" {
+		p = def
+	}
+	p = NormalizeAlias(p)
+	if p == "" {
+		return ""
+	}
+	return filepath.Join(parent, toRel(p))
+}
+
+// SaveDirOf 存档目录名（conf_dir），空则 worlds；beta 分支带 -beta 后缀
+func SaveDirOf(cfg DstConfig) string {
+	dir := DefaultWorlds
+	if cfg.Conf_dir != "" {
+		dir = cfg.Conf_dir
+	}
+	if cfg.Beta == 1 {
+		dir = dir + "-beta"
+	}
+	return dir
+}
+
+// UnifiedUgcDir 统一模组目录 <mod_download>/steamapps/workshop（未配置 parent 返回空）
+func UnifiedUgcDir(cfg DstConfig) string {
+	if cfg.Parent_path == "" {
+		return ""
+	}
+	return filepath.Join(ResolvePath(cfg.Parent_path, cfg.Mod_download_path, DefaultMod), "steamapps", "workshop")
+}
 
 func KleiDstPath() string {
 	home, err := systemUtils.Home()
@@ -28,142 +127,30 @@ func KleiDstPath() string {
 }
 
 func IsBeta() bool {
-	//判断是否存在，不存在创建一个
-	if !fileUtils.Exists(dst_config_path) {
-		if err := fileUtils.CreateFile(dst_config_path); err != nil {
-			log.Panicln("create docker_dst_config error", err)
-		}
-	}
-	data, err := fileUtils.ReadLnFile(dst_config_path)
-	if err != nil {
-		log.Panicln("read docker_dst_config error", err)
-	}
-	for _, value := range data {
-		if value == "" {
-			continue
-		}
-		if strings.Contains(value, "beta=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				beta, _ := strconv.ParseInt(s, 10, 64)
-				if beta == 1 {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return GetDstConfig().Beta == 1
 }
 
-type DstConfig struct {
-	Steamcmd                   string `json:"steamcmd"`
-	Force_install_dir          string `json:"force_install_dir"`
-	Cluster                    string `json:"cluster"`
-	Parent_path                string `json:"parent_path"`
-	Last_parent_path           string `json:"last_parent_path"`
-	Backup                     string `json:"backup"`
-	Mod_download_path          string `json:"mod_download_path"`
-	Bin                        int    `json:"bin"`
-	Beta                       int    `json:"beta"`
-
-	// 根目录位置
-	Persistent_storage_root string `json:"persistent_storage_root"`
-	// 存档相对位置
-	Conf_dir string `json:"conf_dir"`
-}
-
-var dst_config_path = "./dst_config"
-
-// SetDstConfigPathForTest 供跨包测试替换配置文件路径，返回恢复函数
-func SetDstConfigPathForTest(p string) func() {
-	old := dst_config_path
-	dst_config_path = p
-	return func() { dst_config_path = old }
-}
-
-// 相对路径默认值（§7），空值时参与 ResolvePath 判定
-const (
-	DefaultSteamcmd  = "steamcmd"
-	DefaultServerDir = "dst-dedicated-server"
-	DefaultBackup    = "backups"
-	DefaultMod       = "mods"
-	DefaultWorlds    = "worlds"
+// dst_config 读取缓存（mtime 失效）
+var (
+	cfgCacheMu   sync.RWMutex
+	cfgCache     DstConfig
+	cfgCachePath string
+	cfgCacheTime time.Time
 )
-
-// SaveDirOf 存档目录名：conf_dir（UI"存档目录"）或默认 world；beta=1 加 -beta 后缀
-func SaveDirOf(cfg DstConfig) string {
-	saveDir := NormalizeAlias(cfg.Conf_dir)
-	if saveDir == "" {
-		saveDir = DefaultWorlds
-	}
-	if cfg.Beta == 1 {
-		saveDir += "-beta"
-	}
-	return saveDir
-}
-
-// UnifiedUgcDir 游戏与面板共用的模组目录（-ugc_directory 参数值）：
-// 一律统一到模组下载目录的 steamapps/workshop 布局（与 SteamCMD 下载缓存完全一致，同一份文件两处共用）；
-// legacy（无父级）返回空（游戏默认 ugc_mods）。不做自定义，统一用一处。
-func UnifiedUgcDir(cfg DstConfig) string {
-	if cfg.Parent_path == "" {
-		return ""
-	}
-	return filepath.Join(ResolvePath(cfg.Parent_path, cfg.Mod_download_path, DefaultMod), "steamapps", "workshop")
-}
-
-// legacyAlias 旧单数默认值 → 复数（旧配置残留值在读取时归一，避免继续写单数目录）
-var legacyAlias = map[string]string{
-	"backup":      "backups",
-	"mod":         "mods",
-	"world":       "worlds",
-	"world-beta":  "worlds-beta",
-}
-
-// NormalizeAlias 旧默认别名归一（仅当值恰好等于旧默认时生效）
-func NormalizeAlias(v string) string {
-	if alias, ok := legacyAlias[v]; ok {
-		return alias
-	}
-	return v
-}
-
-// toRel 把任意形式的路径剥成相对子路径：去掉盘符、~ 与前导分隔符
-func toRel(p string) string {
-	p = strings.ReplaceAll(p, `\`, "/")
-	if i := strings.Index(p, ":"); i >= 0 {
-		p = p[i+1:]
-	}
-	p = strings.TrimPrefix(p, "~")
-	p = strings.Trim(p, "/")
-	if p == "" {
-		return ""
-	}
-	return filepath.FromSlash(p)
-}
-
-// ResolvePath 强制放在父级文件夹下（不兼容旧配置）：一切输入都当作相对子路径。
-// parent 为空视为未配置，返回空；空值取默认值 def。
-func ResolvePath(parent, p, def string) string {
-	if parent == "" {
-		return ""
-	}
-	if p == "" {
-		p = def
-	}
-	p = NormalizeAlias(p)
-	if p == "" {
-		return ""
-	}
-	return filepath.Join(parent, toRel(p))
-}
 
 func NewDstConfig() *DstConfig {
 	return &DstConfig{}
 }
 
 func GetDstConfig() DstConfig {
+	if fi, err := os.Stat(dst_config_path); err == nil {
+		cfgCacheMu.RLock()
+		cached, cpath, ctime := cfgCache, cfgCachePath, cfgCacheTime
+		cfgCacheMu.RUnlock()
+		if cpath == dst_config_path && !ctime.IsZero() && fi.ModTime().Equal(ctime) {
+			return cached
+		}
+	}
 
 	dstConfig := NewDstConfig()
 
@@ -182,84 +169,39 @@ func GetDstConfig() DstConfig {
 		if value == "" {
 			continue
 		}
-		// TODO 这里解析有问题，如果路径含有 steamcmd 就会存在问题
-		if strings.Contains(value, "steamcmd=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Steamcmd = s
-			}
+		// 精确按 key 匹配:值保留 = 号(Split 全切会截断),key 不做子串匹配(offline_cluster= 不得污染 cluster=)
+		key, val, ok := strings.Cut(value, "=")
+		if !ok {
+			continue
 		}
-		if strings.Contains(value, "force_install_dir=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Force_install_dir = s
+		key = strings.TrimSpace(key)
+		val = strings.TrimSpace(val)
+		switch key {
+		case "steamcmd":
+			dstConfig.Steamcmd = val
+		case "force_install_dir":
+			dstConfig.Force_install_dir = val
+		case "persistent_storage_root":
+			dstConfig.Persistent_storage_root = val
+		case "cluster":
+			dstConfig.Cluster = val
+		case "parent_path":
+			dstConfig.Parent_path = val
+		case "last_parent_path":
+			dstConfig.Last_parent_path = val
+		case "backup":
+			dstConfig.Backup = val
+		case "mod_download_path":
+			dstConfig.Mod_download_path = val
+		case "conf_dir":
+			dstConfig.Conf_dir = val
+		case "bin":
+			if n, err := strconv.ParseInt(val, 10, 64); err == nil {
+				dstConfig.Bin = int(n)
 			}
-		}
-		if strings.Contains(value, "persistent_storage_root=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Persistent_storage_root = s
-			}
-		}
-		if strings.Contains(value, "cluster=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Cluster = s
-			}
-		}
-		if strings.HasPrefix(value, "parent_path=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Parent_path = s
-			}
-		}
-		if strings.HasPrefix(value, "last_parent_path=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Last_parent_path = s
-			}
-		}
-		if strings.Contains(value, "backup=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Backup = s
-			}
-		}
-		if strings.Contains(value, "mod_download_path=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Mod_download_path = s
-			}
-		}
-		if strings.Contains(value, "bin=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				bin, _ := strconv.ParseInt(s, 10, 64)
-				dstConfig.Bin = int(bin)
-			}
-		}
-		if strings.Contains(value, "beta=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				beta, _ := strconv.ParseInt(s, 10, 64)
-				dstConfig.Beta = int(beta)
-			}
-		}
-		if strings.Contains(value, "conf_dir=") {
-			split := strings.Split(value, "=")
-			if len(split) > 1 {
-				s := strings.TrimSpace(split[1])
-				dstConfig.Conf_dir = s
+		case "beta":
+			if n, err := strconv.ParseInt(val, 10, 64); err == nil {
+				dstConfig.Beta = int(n)
 			}
 		}
 	}
@@ -270,6 +212,12 @@ func GetDstConfig() DstConfig {
 	// 不兼容旧配置：不做绝对默认值物化，空值由 ResolvePath 供给默认
 	if dstConfig.Bin == 0 {
 		dstConfig.Bin = 32
+	}
+	// 写缓存（mtime 失效）
+	if fi, err := os.Stat(dst_config_path); err == nil {
+		cfgCacheMu.Lock()
+		cfgCache, cfgCachePath, cfgCacheTime = *dstConfig, dst_config_path, fi.ModTime()
+		cfgCacheMu.Unlock()
 	}
 	return *dstConfig
 }

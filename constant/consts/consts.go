@@ -44,3 +44,11 @@ func init() {
 	}
 
 }
+
+// 启动二进制形态（dst_config 的 bin 值）
+const (
+	BinX64    = 64   // bin64 下的 x64 原生二进制
+	BinLuaJIT = 100  // x64 LuaJIT 构建
+	BinBox86  = 86   // box86 模拟 x64（32 位主机）
+	BinBox64  = 2664 // box64 模拟 x64（ARM 主机）
+)

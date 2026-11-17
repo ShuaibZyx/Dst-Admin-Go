@@ -56,7 +56,8 @@ func (w *WebhookApi) Webhook(ctx *gin.Context) {
 	var body Body
 	err := ctx.ShouldBind(&body)
 	if err != nil {
-		log.Panicln("参数解析错误", err)
+		abort500f(ctx, "参数解析错误", err)
+		return
 	}
 
 	key := ctx.Query("key")
@@ -79,7 +80,7 @@ func (w *WebhookApi) Webhook(ctx *gin.Context) {
 		})
 		break
 	case OnlinePlayers:
-		playerList := playerService.GetPlayerList(clusterName, "Master")
+		playerList := playerListWithTimeout(clusterName, "Master")
 		ctx.JSON(http.StatusOK, vo.Response{
 			Code: 200,
 			Msg:  "success",

@@ -1,6 +1,7 @@
 package dstUtils
 
 import (
+	"dst-admin-go/constant/consts"
 	"bytes"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstConfigUtils"
@@ -156,6 +157,11 @@ func GetModSetup(clusterName string) string {
 }
 
 func GetDstUpdateCmd(clusterName string) string {
+	return buildDstUpdateCmd(runtime.GOOS, clusterName)
+}
+
+// buildDstUpdateCmd 纯构建函数(goos 可注入,便于跨平台测试非本机分支)。
+func buildDstUpdateCmd(goos, clusterName string) string {
 	cluster := dstConfigUtils.GetDstConfig()
 	// 走统一解析（父级模式下配置为相对名，直接用会拼错）
 	steamCmdPath := dstConfigUtils.ResolvePath(cluster.Parent_path, cluster.Steamcmd, dstConfigUtils.DefaultSteamcmd)
@@ -168,7 +174,7 @@ func GetDstUpdateCmd(clusterName string) string {
 	steamCmdPath = filepath.Clean(steamCmdPath)
 
 	// 构建基本命令
-	baseCmd := "+login anonymous +force_install_dir %s +app_update 343050"
+	baseCmd := "+login anonymous +force_install_dir \"%s\" +app_update 343050"
 	if cluster.Beta == 1 {
 		baseCmd += " -beta updatebeta"
 	}
@@ -177,17 +183,17 @@ func GetDstUpdateCmd(clusterName string) string {
 
 	// 根据操作系统生成不同的命令
 	var cmd string
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		cmd = fmt.Sprintf("cd /d \"%s\" && Start \"\" steamcmd.exe %s", steamCmdPath, baseCmd)
 	} else {
 		steamCmdScript := filepath.Join(steamCmdPath, "steamcmd.sh")
-		if cluster.Bin == 86 {
-			cmd = fmt.Sprintf("cd %s ; box86 ./linux32/steamcmd %s", steamCmdPath, baseCmd)
+		if cluster.Bin == consts.BinBox86 && goos != "darwin" {
+			cmd = fmt.Sprintf("cd \"%s\" ; box86 ./linux32/steamcmd %s", steamCmdPath, baseCmd)
 		} else {
 			if fileUtils.Exists(steamCmdScript) {
-				cmd = fmt.Sprintf("cd %s ; ./steamcmd.sh %s", steamCmdPath, baseCmd)
+				cmd = fmt.Sprintf("cd \"%s\" ; ./steamcmd.sh %s", steamCmdPath, baseCmd)
 			} else {
-				cmd = fmt.Sprintf("cd %s ; ./steamcmd %s", steamCmdPath, baseCmd)
+				cmd = fmt.Sprintf("cd \"%s\" ; ./steamcmd %s", steamCmdPath, baseCmd)
 			}
 		}
 

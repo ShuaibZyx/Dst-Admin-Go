@@ -36,3 +36,6 @@ yarn-error.log*
 /py-dst-cli/data
 
 /test
+session.secret
+*_log
+dst-db/

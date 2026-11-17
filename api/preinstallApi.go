@@ -2,6 +2,7 @@ package api
 
 import (
 	"dst-admin-go/service/autoCheck"
+	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
@@ -29,7 +30,14 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 	log.Println(name)
 
 	if !fileUtils.Exists("./static/preinstall/" + name) {
-		log.Panicln("./static/preinstall/"+name, "不存在，请先添加")
+		abort500f(ctx, "./static/preinstall/"+name, "不存在，请先添加")
+		return
+	}
+
+	// 闸门:预设含海难/火山世界时要求已订阅 IA 模组(在停游戏/备份前拦截)
+	if err := mod.CheckIADirGate(cluster.ClusterName, "./static/preinstall/"+name); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+		return
 	}
 
 	path := dstUtils.GetClusterBasePath(cluster.ClusterName)
@@ -37,23 +45,27 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 	//删除上次的备份目录 防止更名失败
 	err := fileUtils.DeleteDir(bakpath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 
 	//先重命名但是不删除
 	err = fileUtils.Rename(path, bakpath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 
 	err = fileUtils.Copy("./static/preinstall/"+name, filepath.Join(dstUtils.GetKleiDstPath()))
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	newpath := dstUtils.GetClusterBasePath(cluster.ClusterName)
 	err = fileUtils.Rename(filepath.Join(dstUtils.GetKleiDstPath(), name), newpath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	//还原cluster_token 等
 	tocopy := []string{"adminlist.txt", "blocklist.txt", "cluster_token.txt", "whitelist.txt"}
@@ -61,13 +73,15 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 		if fileUtils.Exists(filepath.Join(bakpath, s)) {
 			err = fileUtils.Copy(filepath.Join(bakpath, s), newpath)
 			if err != nil {
-				log.Panicln(err)
+				abort500f(ctx, err)
+				return
 			}
 		}
 	}
 	err = fileUtils.DeleteDir(bakpath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	// TODO 宕机恢复重新读取
 	autoCheck.Manager.ReStart(cluster.ClusterName)

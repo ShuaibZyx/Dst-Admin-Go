@@ -7,7 +7,6 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/vo"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -61,7 +60,8 @@ func (d *DstConfigApi) SaveDstConfig(ctx *gin.Context) {
 	dstConfig := dstConfigUtils.NewDstConfig()
 	err := ctx.Bind(dstConfig)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	dstConfigUtils.SaveDstConfig(dstConfig)
 	// 新选的根目录可能尚不存在：先递归建出存档目录，避免后续 open 失败

@@ -3,10 +3,14 @@ package mod
 import (
 	"bufio"
 	"fmt"
+	"dst-admin-go/config/database"
+	"dst-admin-go/model"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"errors"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +49,58 @@ func ClusterModIDs(clusterName string) []string {
 	return ids
 }
 
+// cleanWorkshopDownloadResidue 清理 SteamCMD 工坊下载残留（中断任务的增量状态文件），避免后续下载异常
+func cleanWorkshopDownloadResidue(steamcmdDir, modid string) {
+	dl := filepath.Join(steamcmdDir, "steamapps", "workshop", "downloads")
+	_ = os.RemoveAll(filepath.Join(dl, "322330", modid))
+	_ = os.Remove(filepath.Join(dl, "state_322330_322330_"+modid+".patch"))
+}
+
+// invalidateWorkshopAcf 删除 SteamCMD 工坊安装记录（appworkshop_322330.acf）。
+// 模组归位是把文件从 steamcmd 的 content 目录"搬走"，acf 会留下"已安装"的假记录；
+// 之后其他模组下载若按 acf 复用这些文件块（chunk 去重）会因文件缺失而整体失败
+// （workshop_log: Update canceled ... Missing game files）。删掉后 SteamCMD 重扫 content 目录重建记录。
+func invalidateWorkshopAcf(steamcmdDir string) {
+	_ = os.Remove(filepath.Join(steamcmdDir, "steamapps", "workshop", "appworkshop_322330.acf"))
+}
+
+// ensureLegacyBinFromDB manifest=-1 兜底:从库里该模组的 file_url 拉原始 zip,
+// 写 <ugchandle>_legacy.bin(游戏 legacy 流程的解包素材)。成功返回 ugchandle,任一步失败返回 ""。
+func ensureLegacyBinFromDB(modid, modDir string) string {
+	var info model.ModInfo
+	if err := database.DB.Where("modid = ?", modid).First(&info).Error; err != nil {
+		return ""
+	}
+	if info.FileUrl == "" {
+		return ""
+	}
+	ugc := UgchandleFromURL(info.FileUrl)
+	if ugc == "" {
+		return ""
+	}
+	client := http.Client{Timeout: 30 * time.Second}
+	res, err := client.Get(info.FileUrl)
+	if err != nil {
+		log.Println("[legacy-bin] 下载失败:", modid, err)
+		return ""
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		log.Println("[legacy-bin] 下载状态异常:", modid, res.StatusCode)
+		return ""
+	}
+	zipBytes, err := io.ReadAll(res.Body)
+	if err != nil || len(zipBytes) == 0 {
+		log.Println("[legacy-bin] 读取失败:", modid, err)
+		return ""
+	}
+	if err := WriteLegacyBin(modDir, ugc, zipBytes); err != nil {
+		log.Println("[legacy-bin] 写入失败:", modid, err)
+		return ""
+	}
+	return ugc
+}
+
 // DownloadModToUnified 用 SteamCMD 下载模组并归位到统一模组目录；已存在则跳过。
 // progress 可为 nil。
 func DownloadModToUnified(modid string, progress func(string)) error {
@@ -60,8 +116,15 @@ func DownloadModToUnified(modid string, progress func(string)) error {
 	steamcmdDir := dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Steamcmd, dstConfigUtils.DefaultSteamcmd)
 	modsRoot := filepath.Join(dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Mod_download_path, dstConfigUtils.DefaultMod), "steamapps", "workshop", "content", "322330")
 	target := filepath.Join(modsRoot, modid)
-	if info, err := os.Stat(target); err == nil && info.IsDir() {
-		return nil // 已存在
+	if modDirComplete(target) {
+		return nil // 已完整存在
+	}
+	if dirExists(target) {
+		// 目录在但缺 modinfo.lua（校验判为损坏）：必须清理后重下，
+		// 否则会误判"已存在"跳过下载，校验-修复永远循环报同一批模组
+		if rerr := os.RemoveAll(target); rerr != nil {
+			return errors.New("模组 " + modid + " 无法清理损坏目录（世界运行中会被占用，请停止后重试）: " + rerr.Error())
+		}
 	}
 	exe := steamcmdExePath(steamcmdDir)
 	if _, err := os.Stat(exe); err != nil {
@@ -69,24 +132,60 @@ func DownloadModToUnified(modid string, progress func(string)) error {
 	}
 	report("下载模组 " + modid + " ...")
 	args := []string{"+login", "anonymous", "+workshop_download_item", "322330", modid, "+quit"}
-	err := RunSteamcmdStream(steamcmdDir, args, report)
+	src := filepath.Join(steamcmdDir, "steamapps", "workshop", "content", "322330", modid)
+	// attempt 执行一次下载。注意 SteamCMD 工坊下载失败时退出码仍为 0（仅打印 ERROR!），
+	// 必须以产物是否落盘为准判定成败。
+	attempt := func() error {
+		cleanWorkshopDownloadResidue(steamcmdDir, modid)
+		if serr := RunSteamcmdStream(steamcmdDir, args, report); serr != nil {
+			return serr
+		}
+		if info, serr := os.Stat(src); serr != nil || !info.IsDir() {
+			return errors.New("下载后未找到文件")
+		}
+		return nil
+	}
+	err := attempt()
 	if err != nil {
 		report("[提示] 模组 " + modid + " 下载未成功，5 秒后重试一次...")
 		time.Sleep(5 * time.Second)
-		err = RunSteamcmdStream(steamcmdDir, args, report)
+		invalidateWorkshopAcf(steamcmdDir) // stale 假记录会让 chunk 复用引用已搬走的文件而失败，清掉后全量重下
+		err = attempt()
 	}
 	if err != nil {
 		return errors.New("模组 " + modid + " 下载失败: " + err.Error())
 	}
-	src := filepath.Join(steamcmdDir, "steamapps", "workshop", "content", "322330", modid)
-	if info, err := os.Stat(src); err != nil || !info.IsDir() {
-		return errors.New("模组 " + modid + " 下载后未找到文件")
-	}
 	if err := os.MkdirAll(modsRoot, os.ModePerm); err != nil {
 		return err
 	}
+	// 归位前从 SteamCMD 的 acf 摘出安装记录(带真实 manifest),归位后登记到游戏侧 acf。
+	// 游戏只认游戏侧 acf 的 WorkshopItemsInstalled 登记,缺失会被判"待下载"而不启用。
+	scEntry, hasSc := steamcmdInstalledEntry(steamcmdDir, modid)
 	if err := os.Rename(src, target); err != nil {
 		return errors.New("模组 " + modid + " 归位失败: " + err.Error())
+	}
+	invalidateWorkshopAcf(steamcmdDir)
+	if hasSc && (scEntry.Manifest != "" || scEntry.Ugchandle != "") {
+		if scEntry.Size == 0 {
+			scEntry.Size = dirSizeOnDisk(target)
+		}
+		if rerr := RegisterInstalled(modid, scEntry); rerr != nil {
+			return errors.New("模组 " + modid + " 游戏侧登记失败: " + rerr.Error())
+		}
+	} else {
+		// SteamCMD 记录缺失:按 manifest=-1 登记游戏会走 legacy 解包流程,必须配 legacy bin,
+		// 否则 UMFD 解包失败模组不启用
+		item := AcfItem{Size: dirSizeOnDisk(target), Manifest: "-1"}
+		if item.Ugchandle = ensureLegacyBinFromDB(modid, target); item.Ugchandle == "" {
+			return errors.New("模组 " + modid + " 缺少版本信息且无法补 legacy bin，游戏将无法启用它")
+		}
+		if rerr := RegisterInstalled(modid, item); rerr != nil {
+			return errors.New("模组 " + modid + " 游戏侧登记失败: " + rerr.Error())
+		}
+	}
+	// 收尾验收:ACF 登记有效或 legacy bin 在位,不过则整体报错(下载完成=游戏可用)
+	if verr := verifyGameReadyFn(modid, target); verr != nil {
+		return errors.New("模组 " + modid + " 下载后验收失败: " + verr.Error())
 	}
 	return nil
 }
@@ -98,18 +197,27 @@ var ensureModsMu sync.Mutex
 func EnsureClusterMods(clusterName string, progress func(string)) (int, error) {
 	ensureModsMu.Lock()
 	defer ensureModsMu.Unlock()
+	// 补齐 steamclient 下载所需库布局：缺 libraryfolders.vdf 时游戏内下载必败
+	// (Staging library folder not found)，待下载模组永远不会启用
+	if err := EnsureSteamLibraryLayout(); err != nil {
+		log.Println("[acf] 库布局补齐失败:", err)
+	}
 	ids := ClusterModIDs(clusterName)
 	n := 0
 	for _, id := range ids {
 		cfg := dstConfigUtils.GetDstConfig()
 		modsRoot := filepath.Join(dstConfigUtils.ResolvePath(cfg.Parent_path, cfg.Mod_download_path, dstConfigUtils.DefaultMod), "steamapps", "workshop", "content", "322330")
-		if info, err := os.Stat(filepath.Join(modsRoot, id)); err == nil && info.IsDir() {
-			continue // 已存在，无需下载
+		if modDirComplete(filepath.Join(modsRoot, id)) {
+			continue // 已完整存在，无需下载
 		}
 		if err := DownloadModToUnified(id, progress); err != nil {
 			return n, err
 		}
 		n++
+	}
+	// 自愈:本地已有文件但游戏侧 acf 缺登记(或历史遗留)时补登记,避免游戏判"待下载"而不启用
+	if fixed := EnsureGameAcfEntries(); fixed > 0 && progress != nil {
+		progress(fmt.Sprintf("已补登记 %d 个模组的安装记录", fixed))
 	}
 	return n, nil
 }
@@ -218,6 +326,10 @@ func SyncMods(clusterName, mode string, progress func(string)) (string, error) {
 	ids := ClusterModIDs(clusterName)
 	if len(ids) == 0 {
 		return "", fmt.Errorf("未在存档中找到任何模组登记（modoverrides），无法执行")
+	}
+	// 与 EnsureClusterMods 一致:先补 steamclient 库布局,缺 libraryfolders.vdf 时游戏内下载必败
+	if err := EnsureSteamLibraryLayout(); err != nil {
+		log.Println("[acf] 库布局补齐失败:", err)
 	}
 	if mode == "redownload" {
 		report("执行模式：全部重新下载（先删后下），共 %d 个模组", len(ids))

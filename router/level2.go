@@ -20,6 +20,7 @@ func initLevel2(router *gin.RouterGroup) {
 	group2 := router.Group("/api/game/8level")
 	{
 		group2.GET("/status", gameLevelApi.GetStatus)
+		group2.GET("/status/stream", gameLevelApi.StatusStream)
 		group2.GET("/start", gameLevelApi.Start)
 		group2.GET("/stop", gameLevelApi.Stop)
 		group2.GET("/start/all", gameLevelApi.StartAll)
@@ -55,17 +56,8 @@ func initLevel2(router *gin.RouterGroup) {
 	{
 		group4.GET("/direct-connect", shareApi.DirectConnect)
 		group4.POST("/direct-connect/config", shareApi.DirectConnectConfig)
-		group4.GET("/keyCer", shareApi.GetKeyCerApi)
-		group4.GET("/keyCer/reflush", shareApi.ReflushKeyCerApi)
-		group4.GET("/keyCer/enable", shareApi.EnableKeyCerApi)
 
 		group4.POST("/cluster/import", shareApi.ImportClusterConfig)
-	}
-
-	group5 := router.Group("/share")
-	{
-		group5.GET("/cluster", shareApi.ShareClusterConfig)
-
 	}
 
 }

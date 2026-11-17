@@ -7,7 +7,6 @@ import (
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -97,7 +96,8 @@ func (g *GameBackUpApi) SaveBackupSnapshotsSetting(ctx *gin.Context) {
 	var oldBackupSnapshot model.BackupSnapshot
 	err := ctx.ShouldBind(&backupSnapshot)
 	if err != nil {
-		log.Panicln("参数错误", err)
+		abort500f(ctx, "参数错误", err)
+		return
 	}
 	db := database.DB
 	db.First(&oldBackupSnapshot)
@@ -147,4 +147,3 @@ func (g *GameBackUpApi) BackupSnapshotsList(ctx *gin.Context) {
 		Data: snapshotBackupList,
 	})
 }
-

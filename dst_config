@@ -1,0 +1,11 @@
+parent_path=D:/DST-Server
+last_parent_path=
+steamcmd=steamcmd
+force_install_dir=dst-dedicated-server
+conf_dir=worlds
+persistent_storage_root=
+cluster=ROGIA
+backup=backups
+mod_download_path=mods
+bin=64
+beta=0

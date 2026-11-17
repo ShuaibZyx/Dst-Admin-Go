@@ -15,6 +15,9 @@ import (
 
 const kvLuaJit = "lua_jit"
 
+// isModSubscribedFn 订阅检查入口(可替换,便于测试)
+var isModSubscribedFn = mod.IsModSubscribed
+
 type LuaJitApi struct{}
 
 // Get 返回当前 LuaJIT 模组开关状态
@@ -33,13 +36,22 @@ func (l *LuaJitApi) Set(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
+
+	cluster := clusterUtils.GetClusterFromGin(ctx)
+
+	// 闸门:启用 LuaJIT 需先订阅 workshop-3444078585,未订阅则拦截;关闭不设限(退订后仍可关闭)
+	subscribed := isModSubscribedFn(cluster.ClusterName, mod.LuaJitModId)
+	if err := mod.CheckLuaJitToggle(body.Enabled, subscribed); err != nil {
+		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
+		return
+	}
+
 	v := "false"
 	if body.Enabled {
 		v = "true"
 	}
 	saveKV(kvLuaJit, v)
 
-	cluster := clusterUtils.GetClusterFromGin(ctx)
 	basePath := dstUtils.GetClusterBasePath(cluster.ClusterName)
 	entries, err := filepath.Glob(filepath.Join(basePath, "*", "modoverrides.lua"))
 	if err == nil {

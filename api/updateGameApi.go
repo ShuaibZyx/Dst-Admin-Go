@@ -1,8 +1,8 @@
 package api
 
 import (
-	mod2 "dst-admin-go/service/mod"
 	"dst-admin-go/service"
+	mod2 "dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"fmt"
 	"net/http"
@@ -14,7 +14,7 @@ import (
 
 type GameUpdateApi struct{}
 
-var updateSession = NewLiveSession()
+var updateSession = service.NewLiveSession()
 
 // UpdateGame GET /api/game/update?isDelete= —— SSE：停世界 → 校验/更新（可选先删服务器目录）→ 重写模组订阅
 func (g *GameUpdateApi) UpdateGame(ctx *gin.Context) {

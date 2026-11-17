@@ -5,7 +5,6 @@ import (
 	"dst-admin-go/model"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 )
 
@@ -32,7 +31,8 @@ func (i *KvApi) SaveKv(ctx *gin.Context) {
 	kv := model.KV{}
 	err := ctx.ShouldBind(&kv)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	db := database.DB
 	oldKv := model.KV{}

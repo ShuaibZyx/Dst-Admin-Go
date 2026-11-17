@@ -32,8 +32,8 @@ func TestListDirsReturnsSubdirs(t *testing.T) {
 	var resp struct {
 		Code int `json:"code"`
 		Data struct {
-			Path  string `json:"path"`
-			Dirs  []struct {
+			Path string `json:"path"`
+			Dirs []struct {
 				Name string `json:"name"`
 				Path string `json:"path"`
 			} `json:"dirs"`

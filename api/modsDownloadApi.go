@@ -1,6 +1,7 @@
 package api
 
 import (
+	"dst-admin-go/service"
 	mod2 "dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"fmt"
@@ -11,7 +12,7 @@ import (
 
 type ModsDownloadApi struct{}
 
-var modsDlSession = NewLiveSession()
+var modsDlSession = service.NewLiveSession()
 
 // DownloadCurrent 校验/下载当前存档模组（SSE 进度，可重连接上）。
 // mode=repair：校验并修复问题项；mode=redownload：先删后下全部模组。

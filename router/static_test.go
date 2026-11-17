@@ -29,7 +29,15 @@ func setupStaticApp(t *testing.T) *gin.Engine {
 	must(os.WriteFile(filepath.Join(dir, "dist", "misc", "icon.png"), []byte("png"), 0o644))
 	must(os.WriteFile(filepath.Join(dir, "dist", "misc", "data.json"), []byte("{}"), 0o644))
 	must(os.WriteFile(filepath.Join(dir, "dist", "assets", "index-hash.js"), []byte("js"), 0o644))
-	t.Chdir(dir)
+	// t.Chdir 需要 go1.24（module 是 1.23）：等价写法
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
 	app := gin.New()
 	initStaticFile(app)
 	return app

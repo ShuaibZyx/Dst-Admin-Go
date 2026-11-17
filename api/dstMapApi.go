@@ -38,13 +38,15 @@ func (d *DstMapApi) GenDstMap(ctx *gin.Context) {
 	sessionPath := filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster, levelName, "save", "session")
 	filePath, err := findLatestMetaFile(sessionPath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	log.Println("生成地图", filePath, outputImage)
 	generator := service.NewDSTMapGenerator()
 	height, width, err := service.ExtractDimensions(filePath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	err = generator.GenerateMap(
 		filePath,
@@ -53,7 +55,8 @@ func (d *DstMapApi) GenDstMap(ctx *gin.Context) {
 		width,
 	)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
@@ -97,11 +100,13 @@ func (d *DstMapApi) HasWalrusHutPlains(ctx *gin.Context) {
 	sessionPath := filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster, levelName, "save", "session")
 	filePath, err := findLatestMetaFile(sessionPath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	file, err := fileUtils.ReadFile(filePath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	hasWalrusHutPlains := strings.Contains(file, "WalrusHut_Plains")
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -126,11 +131,13 @@ func (d *DstMapApi) GetSessionFile(ctx *gin.Context) {
 	sessionPath := filepath.Join(dstUtils.GetKleiDstPath(), cluster.ClusterName, levelName, "save", "session")
 	filePath, err := findLatestMetaFile(sessionPath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	file, err := fileUtils.ReadFile(filePath)
 	if err != nil {
-		log.Panicln(err)
+		abort500f(ctx, err)
+		return
 	}
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,

@@ -18,7 +18,7 @@ func Recover(c *gin.Context) {
 			//c.JSON(http.StatusOK, Result.Fail(errorToString(r)))
 			//Result.Fail不是本例的重点，因此用下面代码代替
 			c.JSON(http.StatusOK, gin.H{
-				"code": "500",
+				"code": 500,
 				"msg":  errorToString(r),
 				"data": nil,
 			})

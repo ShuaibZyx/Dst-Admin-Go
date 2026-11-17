@@ -57,7 +57,9 @@ func (receiver *ClusterContainer) StopLevel(cluster, levelName string) {
 		value.Stop()
 		return
 	}
-	// 面板重启后无控制台句柄（优雅通道已失）：回退按进程停止
+	// 面板重启后无控制台句柄（优雅通道已失）：回退按进程停止。
+	// 强杀会丢失游戏日志缓冲尾部,必须告知用户,停止过程不能是黑盒。
+	StartLog.Logf("[提示] %s/%s 面板重启后无控制台句柄, 改用进程终止(停止瞬间的日志可能丢失)", cluster, levelName)
 	forceStopLevelPid(cluster, levelName)
 }
 
@@ -87,7 +89,14 @@ func matchLevelCmdline(cmdline []string, cluster, level string) bool {
 	if len(cmdline) == 0 {
 		return false
 	}
-	base := strings.ToLower(filepath.Base(cmdline[0]))
+	// gopsutil Windows 的 CmdlineSlice 返回单元素整条命令行(wmic 形态),
+	// exe 判定取"第一个空格前"(并去引号)再 Base——直接 Base 会取到命令行末尾的
+	// 参数值(如 -ugc_directory 的目录名),匹配恒失败,面板重启后世界状态恒"停止"。
+	first := strings.Trim(cmdline[0], `"`)
+	if i := strings.IndexAny(first, " \t"); i > 0 {
+		first = first[:i]
+	}
+	base := strings.ToLower(filepath.Base(strings.Trim(first, `"`)))
 	if !strings.Contains(base, "dontstarve_dedicated_server") {
 		return false
 	}
@@ -156,11 +165,57 @@ func cpuByPid(pid int32) float64 {
 	if err != nil {
 		return 0
 	}
-	percent, err := p.Percent(time.Second)
+	// interval=0: 与上次采样做差,零阻塞。time.Second 会每次采样阻塞 1 秒——
+	// 世界运行时 status 轮询每请求卡 1 秒,连接池占满拖垮整个面板。
+	percent, err := p.Percent(0)
 	if err != nil {
 		return 0
 	}
 	return percent
+}
+
+// formatElapsed 时长中文格式化(日志面板"进程运行时长:{{elapsed}}")
+func formatElapsed(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%d 秒", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%d 分 %d 秒", int(d.Minutes()), int(d.Seconds())%60)
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d 小时 %d 分", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		return fmt.Sprintf("%d 天 %d 小时", int(d.Hours())/24, int(d.Hours())%24)
+	}
+}
+
+// elapsedByPid 进程运行时长(进程启动至今);取不到返回空串
+func elapsedByPid(pid int32) string {
+	if pid <= 0 {
+		return ""
+	}
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return ""
+	}
+	ms, err := p.CreateTime()
+	if err != nil || ms <= 0 {
+		return ""
+	}
+	return formatElapsed(time.Since(time.UnixMilli(ms)))
+}
+
+// GetProcessElapsed 实例进程的运行时长;无 pid 返回空
+func (receiver *LevelInstance) GetProcessElapsed() string {
+	receiver.lock.Lock()
+	pid := receiver.pid
+	receiver.lock.Unlock()
+	if pid <= 0 {
+		return ""
+	}
+	return elapsedByPid(int32(pid))
 }
 
 func (receiver *ClusterContainer) Status(cluster, levelName string) bool {
@@ -184,6 +239,14 @@ func (receiver *ClusterContainer) CpuUsage(cluster, levelName string) float64 {
 		return value.GetProcessCpuInfo()
 	}
 	return cpuByPid(findLevelPid(cluster, levelName))
+}
+
+// Elapsed 进程运行时长(文本);无进程/取不到返回空串
+func (receiver *ClusterContainer) Elapsed(cluster, levelName string) string {
+	if value := receiver.get(cluster, levelName); value != nil {
+		return value.GetProcessElapsed()
+	}
+	return elapsedByPid(findLevelPid(cluster, levelName))
 }
 
 // Kill 强杀游戏进程（B15：游戏卡死不响应 c_shutdown 时使用）
@@ -458,7 +521,7 @@ func (receiver *LevelInstance) GetProcessCpuInfo() float64 {
 		fmt.Println("Error getting process info:", err)
 		return 0
 	}
-	cpuPercent, err := p.Percent(time.Second)
+	cpuPercent, err := p.Percent(0) // interval=0 差分采样,零阻塞(同 cpuByPid)
 	if err != nil {
 		fmt.Println("Error getting cpu info:", err)
 		return 0

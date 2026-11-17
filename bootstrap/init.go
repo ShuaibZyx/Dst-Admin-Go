@@ -53,7 +53,6 @@ func initDB() {
 		&model.Spawn{},
 		&model.PlayerLog{},
 		&model.Connect{},
-		&model.Regenerate{},
 		&model.ModInfo{},
 		&model.Cluster{},
 		&model.JobTask{},
@@ -66,6 +65,14 @@ func initDB() {
 	)
 	if err != nil {
 		return
+	}
+	// 清理 mod_infos 历史重复行并建立活跃行唯一索引（幂等），杜绝并发重复插入
+	if err := mod.EnsureModInfoUniqueness(database.DB); err != nil {
+		log.Println("警告: mod_infos 唯一性初始化失败: ", err)
+	}
+	// 高频查询列索引（幂等）
+	if err := EnsureQueryIndexes(database.DB); err != nil {
+		log.Println("警告: 查询索引创建失败: ", err)
 	}
 }
 

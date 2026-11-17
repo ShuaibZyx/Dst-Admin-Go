@@ -10,6 +10,8 @@ type DstPsVo struct {
 	MemUage string `json:"memUage"`
 	VSZ     string `json:"VSZ"`
 	RSS     string `json:"RSS"`
+	// Elapsed 进程运行时长文本(如 "2 小时 15 分");无进程为空,前端显示"未运行/未知"
+	Elapsed string `json:"elapsed"`
 }
 
 func NewDstPsVo() *DstPsVo {

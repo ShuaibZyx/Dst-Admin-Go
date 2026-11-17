@@ -8,22 +8,28 @@ import (
 	"os"
 	"dst-admin-go/middleware"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/memstore"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"time"
 )
 
-func NewRoute() *gin.Engine {
-
-	app := gin.Default()
-
-	store := memstore.NewStore(loadSessionSecret()) // A5: 不再硬编码签名密钥
+// newSessionStore 登录态存储:session 数据随签名 cookie 走(而非进程内存),
+// 服务重启不失效——否则每次重启面板都把已登录用户踢成 401。
+func newSessionStore(secret []byte) sessions.Store {
+	store := cookie.NewStore(secret)
 	store.Options(sessions.Options{
 		Path:     "/",
 		MaxAge:   int(60 * 24 * 7 * time.Minute.Seconds()),
 		HttpOnly: true,
 	})
-	app.Use(sessions.Sessions("token", store))
+	return store
+}
+
+func NewRoute() *gin.Engine {
+
+	app := gin.Default()
+
+	app.Use(sessions.Sessions("token", newSessionStore(loadSessionSecret()))) // A5: 不再硬编码签名密钥
 
 	app.Use(middleware.Recover)
 	// app.Use(middleware.ShellInjectionInterceptor())
@@ -43,7 +49,6 @@ func NewRoute() *gin.Engine {
 	initLoginRouter(router)
 	initModRouter(router)
 	initPlayerRouter(router)
-	initStatisticsRouter(router)
 	initThirdPartyRouter(router)
 	initWsRouter(router)
 	initSteamRouter(router)

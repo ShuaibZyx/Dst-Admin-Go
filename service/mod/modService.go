@@ -221,11 +221,18 @@ func UpdateModinfoList(lang string) {
 	if err != nil {
 		log.Panicln(err)
 	}
+	seen := map[string]bool{}
 	for i := range publishedFileDetails {
 		publishedfiledetail := publishedFileDetails[i]
 		for j := range modInfos {
-			if modInfos[j].Modid == publishedfiledetail.Publishedfileid && modInfos[j].LastTime < publishedfiledetail.TimeUpdated {
-				needUpdateList = append(needUpdateList, modInfos[i])
+			if modInfos[j].Modid != publishedfiledetail.Publishedfileid {
+				continue
+			}
+			// 配置为空的记录（历史解析失败遗留）也加入重解析，否则空配置永远无法恢复
+			configEmpty := modInfos[j].ModConfig == "" || modInfos[j].ModConfig == "{}"
+			if (modInfos[j].LastTime < publishedfiledetail.TimeUpdated || configEmpty) && !seen[modInfos[j].Modid] {
+				seen[modInfos[j].Modid] = true
+				needUpdateList = append(needUpdateList, modInfos[j])
 			}
 		}
 	}

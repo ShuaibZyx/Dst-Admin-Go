@@ -16,7 +16,7 @@ func TestResolvePath(t *testing.T) {
 		{"空值取默认", `D:\DST`, "", "mods", filepath.Join(`D:\DST`, "mods")},
 		{"空值空默认", `D:\DST`, "", "", ""},
 		{"parent 空返回空", "", "steamcmd", "steamcmd", ""},
-		{"含空格父级", "/opt/dst parent", "mod", "mod", filepath.Join("/opt/dst parent", "mod")},
+		{"含空格父级", "/opt/dst parent", "steamcmd", "steamcmd", filepath.Join("/opt/dst parent", "steamcmd")},
 		{"多级相对", "/p", "a/b", "x", filepath.Join("/p", "a", "b")},
 		{"旧单数别名归一", `D:\DST`, "world", "worlds", filepath.Join(`D:\DST`, "worlds")},
 		{"旧单数别名归一mod", `D:\DST`, "mod", "mods", filepath.Join(`D:\DST`, "mods")},

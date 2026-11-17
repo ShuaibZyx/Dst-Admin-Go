@@ -24,7 +24,8 @@ func (m *AutoCheckApi) SaveAutoCheck(ctx *gin.Context) {
 	var autoCheck model.AutoCheck
 	err := ctx.ShouldBind(&autoCheck)
 	if err != nil {
-		log.Panicln("参数错误", err)
+		abort500f(ctx, "参数错误", err)
+		return
 	}
 	db := database.DB
 	db.Save(&autoCheck)
@@ -323,7 +324,8 @@ func (m *AutoCheckApi) SaveAutoCheck2(ctx *gin.Context) {
 	var autoCheck model.AutoCheck
 	err := ctx.ShouldBind(&autoCheck)
 	if err != nil {
-		log.Panicln("参数错误", err)
+		abort500f(ctx, "参数错误", err)
+		return
 	}
 	db := database.DB
 	if autoCheck.Uuid == "" {

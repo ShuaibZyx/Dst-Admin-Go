@@ -3,6 +3,7 @@ package service
 import (
 	"dst-admin-go/config/database"
 	"dst-admin-go/model"
+	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
@@ -120,6 +121,12 @@ func (b *BackupService) RestoreBackup(ctx *gin.Context, backupName string) error
 		_ = fileUtils.DeleteDir(tmpPath)
 		return err
 	}
+	// 闸门:恢复的存档含海难/火山世界时要求已订阅 IA 模组,未订阅整体拒绝(原存档保持不变)
+	if err := mod.CheckIADirGate(cluster.ClusterName, tmpPath); err != nil {
+		log.Println("备份恢复被拦截:", err)
+		_ = fileUtils.DeleteDir(tmpPath)
+		return err
+	}
 	// I3: 原子交换：旧档先改名，替换失败可回滚，成功后删旧档
 	oldPath := clusterPath + ".restore_old"
 	if fileUtils.Exists(oldPath) { // I-3: 遗留副本可能是唯一存档，先回滚或清场
@@ -160,7 +167,11 @@ func (b *BackupService) CreateBackup(clusterName, backupName string) {
 
 	src := dstUtils.GetClusterBasePath(clusterName)
 	if !fileUtils.Exists(backupPath) {
-		log.Panicln("backup path is not exists")
+		// 备份目录首次使用时自动创建(系统设置里配置的路径可能尚未成型)
+		fileUtils.CreateDirIfNotExists(backupPath)
+		if !fileUtils.Exists(backupPath) {
+			log.Panicln("backup path is not exists")
+		}
 	}
 	if backupName == "" {
 		backupName = b.GenGameBackUpName(cluster.ClusterName)

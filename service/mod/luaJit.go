@@ -3,11 +3,23 @@
 package mod
 
 import (
+	"errors"
 	"os"
 	"strings"
 )
 
 const LuaJitModId = "workshop-3444078585"
+
+// ErrLuaJitNotSubscribed 启用 LuaJIT 闸门：模组未订阅/不可用时拦截
+var ErrLuaJitNotSubscribed = errors.New("需先订阅 " + LuaJitModId + " 模组后才能开启 LuaJIT 开关")
+
+// CheckLuaJitToggle LuaJIT 开关闸门：启用需模组已订阅；关闭不设限（退订后仍可关闭，避免开关卡死在开启态）。
+func CheckLuaJitToggle(enabled, subscribed bool) error {
+	if enabled && !subscribed {
+		return ErrLuaJitNotSubscribed
+	}
+	return nil
+}
 
 // findModBlock 按括号配平定位 ["id"] = { ... } 块（M-1：跨嵌套、不误匹配相邻 mod）
 func findModBlock(s string) (start, end int, ok bool) {

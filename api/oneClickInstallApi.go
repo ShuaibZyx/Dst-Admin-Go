@@ -2,6 +2,7 @@ package api
 
 import (
 	"archive/zip"
+	"dst-admin-go/service"
 	mod2 "dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 
 type OneClickInstallApi struct{}
 
-var oneclickSession = NewLiveSession()
+var oneclickSession = service.NewLiveSession()
 
 // oneclickTargets 一键下载的目标目录（全部来自配置）
 func oneclickTargets(cfg dstConfigUtils.DstConfig) (steamcmdDir, serverDir, modDir string) {

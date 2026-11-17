@@ -77,48 +77,6 @@ func (c *Collect) StartCollect() {
 	}()
 }
 
-func (c *Collect) parseSpawnRequestLog(text string) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Spawn request Log text: %s\n", text)
-			log.Printf("玩家角色日志解析异常: %v\n", r)
-		}
-	}()
-
-	// 捕获 (1)时间, (2)动作, (3)角色, (4)玩家名
-	re := regexp.MustCompile(`^\[([^\]]+)\]:\s*(.*?):\s*(\w+)\s*from\s*(.+)$`)
-	matches := re.FindStringSubmatch(text)
-
-	if len(matches) != 5 {
-		// 如果日志格式不匹配，直接退出
-		log.Printf("Spawn request 日志格式不匹配: %s\n", text)
-		return
-	}
-
-	t := matches[1] // 00:37:41
-	// action := matches[2] // Spawn request
-	role := matches[3] // winona
-	name := strings.TrimSpace(matches[4])
-
-	spawn := model.Spawn{Name: name, Role: role, Time: t, ClusterName: c.clusterName}
-	if err := database.DB.Create(&spawn).Error; err != nil {
-		log.Printf("插入玩家 Spawn 日志失败: %v\n", err)
-	}
-}
-
-func (c *Collect) parseRegenerateLog(text string) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Generating 日志解析异常:", err)
-		}
-	}()
-
-	regenerate := model.Regenerate{
-		ClusterName: c.clusterName,
-	}
-	database.DB.Create(&regenerate)
-}
-
 func (c *Collect) parseNewIncomingLog(lines []string) {
 
 	defer func() {
@@ -126,58 +84,67 @@ func (c *Collect) parseNewIncomingLog(lines []string) {
 			log.Println("new incoming 日志解析异常:", err)
 		}
 	}()
-	connect := model.Connect{}
-	log.Println("len:", len(lines), lines)
-	for i, line := range lines {
-		if i == 1 {
-			// 解析 ip
-			str := strings.Split(line, " ")
-			if len(str) < 5 {
-				log.Println("ip 解析错误: ", line)
-				connect.Ip = ""
-			} else {
-				var ip string
-				if strings.Contains(line, "[LAN]") {
-					ip = str[5]
-				} else {
-					ip = str[4]
-				}
-				connect.Ip = ip
-				fmt.Println("ip", ip)
-			}
+	// 按行特征正则提取,不再按空格固定下标(真实块行长不一:steamid 行只有 4 词,
+	// 旧下标取 steamid 会越界 panic,整条连接记录丢失)
+	connect := model.Connect{ClusterName: c.clusterName}
+	for _, line := range lines {
+		if m := regexp.MustCompile(`Client connected from (\S+)`).FindStringSubmatch(line); m != nil {
+			connect.Ip = strings.Split(m[1], "|")[0]
 		}
-		if i == 2 {
-			// 解析 ip
+		if m := regexp.MustCompile(`Client authenticated: \(([A-Za-z0-9_-]+)\) (.+)`).FindStringSubmatch(line); m != nil {
+			connect.KuId = m[1]
+			connect.Name = strings.TrimSpace(m[2])
 		}
-		if i == 3 {
-			// 解析 KuId 和 用户名
-			str := strings.Split(line, " ")
-			if len(str) <= 4 {
-				log.Println("kuid 解析错误: ", line)
-			} else {
-				ku := str[3]
-				ku = ku[1 : len(ku)-1]
-				name := str[4]
-				connect.Name = name
-				connect.KuId = ku
-				fmt.Println("ku", ku, "name", name)
-			}
-		}
-		if i == 4 {
-			// 解析 steamId
-			str := strings.Split(line, " ")
-			if len(str) < 4 {
-				log.Println("steamid 解析错误: ", line)
-			} else {
-				steamId := str[4]
-				steamId = steamId[1 : len(steamId)-1]
-				fmt.Println("steamId", steamId)
-				connect.SteamId = steamId
-				connect.ClusterName = c.clusterName
-			}
+		if m := regexp.MustCompile(`Authenticated host '(\d+)'`).FindStringSubmatch(line); m != nil {
+			connect.SteamId = m[1]
 		}
 	}
 	database.DB.Create(&connect)
+}
+
+// parseServerLogEvent 从 server_log 的客户端认证/断开行生成玩家日志进/退记录。
+// 聊天日志的 [Join/Leave Announcement] 依赖公告模组输出,这里做兜底,保证玩家日志页有数据。
+func (c *Collect) parseServerLogEvent(text string) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("server_log 玩家事件解析异常:", err)
+		}
+	}()
+
+	var t, action, kuId, name string
+	if m := regexp.MustCompile(`^\[([^\]]+)\]:\s*Client authenticated: \(([A-Za-z0-9_-]+)\) (.+)$`).FindStringSubmatch(text); m != nil {
+		t, action, kuId, name = m[1], "[Join]", m[2], strings.TrimSpace(m[3])
+	} else if m := regexp.MustCompile(`^\[([^\]]+)\]:\s*.*SendUserDisconnect for '(.+)'$`).FindStringSubmatch(text); m != nil && strings.TrimSpace(m[2]) != "" {
+		t, action, name = m[1], "[Leave]", strings.TrimSpace(m[2])
+	} else {
+		return
+	}
+
+	playerLog := model.PlayerLog{
+		Name:        name,
+		Action:      action,
+		Time:        t,
+		KuId:        kuId,
+		ClusterName: c.clusterName,
+	}
+	if spawn := c.getSpawnRole(name); spawn != nil && playerLog.Role == "" {
+		playerLog.Role = spawn.Role
+	}
+	// 只补空字段:认证行自带的 KuId 是权威值,不被历史连接表覆盖
+	if connect := c.getConnectInfo(name); connect != nil {
+		if playerLog.Ip == "" {
+			playerLog.Ip = connect.Ip
+		}
+		if playerLog.KuId == "" {
+			playerLog.KuId = connect.KuId
+		}
+		if playerLog.SteamId == "" {
+			playerLog.SteamId = connect.SteamId
+		}
+	}
+	if err := database.DB.Create(&playerLog).Error; err != nil {
+		log.Println("插入玩家日志失败:", err)
+	}
 }
 
 func (c *Collect) tailServeLog(fileName string) {
@@ -207,12 +174,10 @@ func (c *Collect) tailServeLog(fileName string) {
 				time.Sleep(time.Second)
 			} else {
 				text := line.Text
-				if find := strings.Contains(text, "Spawn request"); find {
-					c.parseSpawnRequestLog(text)
-				} else if find := strings.Contains(text, "# Generating"); find {
-					c.parseRegenerateLog(text)
-				} else if find := strings.Contains(text, "New incoming connection"); find {
+				if find := strings.Contains(text, "New incoming connection"); find {
 					isNewConnect = true
+				} else if strings.Contains(text, "Client authenticated:") || strings.Contains(text, "SendUserDisconnect") {
+					c.parseServerLogEvent(text)
 				}
 				// 获取接下来的五条数据
 				if isNewConnect {
@@ -466,6 +431,36 @@ func (c *Collect) tailServerChatLog(fileName string) {
 			return
 		}
 	}
+}
+
+// RecordSpawn 记录玩家当前角色（名称→角色）。
+// 旧 Spawn request 日志格式已消失，角色来源改为在线玩家观测（prefab）；
+// 同角色去重、换角色追加，getSpawnRole 取最新记录做玩家日志角色富化。
+func RecordSpawn(name, role, clusterName string) {
+	if name == "" || role == "" {
+		return
+	}
+	last := new(model.Spawn)
+	database.DB.Where("name = ? AND cluster_name = ?", name, clusterName).Last(last)
+	if last.Role == role {
+		return
+	}
+	database.DB.Create(&model.Spawn{
+		Name:        name,
+		Role:        role,
+		Time:        time.Now().Format("15:04:05"),
+		ClusterName: clusterName,
+	})
+}
+
+// LookupRole 查询玩家最新角色(名称→角色),供玩家列表等跨包使用;无记录返回空串。
+func LookupRole(name, clusterName string) string {
+	if name == "" {
+		return ""
+	}
+	spawn := new(model.Spawn)
+	database.DB.Where("name = ? and cluster_name = ?", name, clusterName).Last(spawn)
+	return spawn.Role
 }
 
 func (c *Collect) getSpawnRole(name string) *model.Spawn {

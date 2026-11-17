@@ -8,15 +8,13 @@ import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"encoding/json"
+	"errors"
 	"fmt"
 	lua "github.com/yuin/gopher-lua"
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"strconv"
 
 	"archive/zip"
@@ -94,36 +92,19 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 	}
 
 	// 检查 mod 文件是否已经存在
-	// mod_download_path := "/root/mine/dst/dst-admin-go-1.0.0/go-mod/mod"
 	dstConfig := dstConfigUtils.GetDstConfig()
 	mod_download_path := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Mod_download_path, dstConfigUtils.DefaultMod)
 	fileUtils.CreateFileIfNotExists(mod_download_path)
 	// 下载的模组位置
 	mod_path := filepath.Join(mod_download_path, "steamapps", "workshop", "content", "322330", mod_id)
-	if _, err := os.Stat(mod_path); err == nil {
-		fmt.Println("Mod already downloaded to:", mod_path)
-	} else {
-		// 调用 SteamCMD 命令下载 mod(exec.Command 无 shell,防注入/含空格路径断裂;等待下载完成)
-		steamcmd := dstConfigUtils.ResolvePath(dstConfig.Parent_path, dstConfig.Steamcmd, dstConfigUtils.DefaultSteamcmd)
-		var exe string
-		if runtime.GOOS == "windows" {
-			exe = filepath.Join(steamcmd, "steamcmd.exe")
-		} else if fileUtils.Exists(filepath.Join(steamcmd, "steamcmd")) {
-			exe = filepath.Join(steamcmd, "steamcmd")
-		} else {
-			exe = filepath.Join(steamcmd, "steamcmd.sh")
-		}
-		cmd := exec.Command(exe, steamCmdDownloadArgs(mod_download_path, mod_id)...)
-		log.Println("正在下载模组 command: ", cmd)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Panicln("下载mod失败，请检查steamcmd路径是否配置正确", err)
+	if _, err := os.Stat(filepath.Join(mod_path, "modinfo.lua")); err != nil {
+		// 本地缺失：用统一下载器下载并归位。注意 SteamCMD 的 workshop 下载永远落在
+		// steamcmd 缓存目录（force_install_dir 对 workshop_download_item 不生效），
+		// 必须由 DownloadModToUnified 归位后 modinfo.lua 才会出现在 mod_path。
+		log.Println("模组本地缺失，开始下载: ", mod_id)
+		if derr := DownloadModToUnified(mod_id, nil); derr != nil {
+			log.Println("模组下载失败: ", derr)
 			return make(map[string]interface{})
-		}
-		// 解析 SteamCMD 输出,提取 mod 文件路径(仅日志;mod_path 已由 mod_download_path 计算)
-		re := regexp.MustCompile(`Downloaded item \d+ to "([^"]+)"`)
-		if match := re.FindStringSubmatch(string(output)); len(match) >= 2 {
-			fmt.Println("Mod downloaded to:", match[1])
 		}
 	}
 
@@ -134,17 +115,6 @@ func get_mod_info_config(lang, mod_id string) map[string]interface{} {
 		return make(map[string]interface{})
 	}
 	return read_mod_info(lang, mod_id, modinfo_path)
-}
-
-// steamCmdDownloadArgs 返回 steamcmd 下载 mod 的参数(不含可执行文件)。
-// 每个 token 单独 argv:经 exec.Command 无 shell 传参,防注入、防含空格路径断裂(B17)。
-func steamCmdDownloadArgs(modDownloadPath, modID string) []string {
-	return []string{
-		"+login", "anonymous",
-		"+force_install_dir", modDownloadPath,
-		"+workshop_download_item", "322330", modID,
-		"+quit",
-	}
 }
 
 func read_mod_info(lang, mod_id, modinfo_path string) map[string]interface{} {
@@ -182,10 +152,10 @@ func parseModInfoLua(lang, mod_id, script string) map[string]interface{} {
 	}))
 
 	// 运行Lua脚本文件
-	L.DoString(script)
-	// if err := L.DoFile("hello.lua"); err != nil {
-	//      panic(err)
-	// }
+	if err := L.DoString(script); err != nil {
+		// 执行出错会得到残缺的元数据，这里必须留痕（此前错误被忽略导致空配置无从排查）
+		log.Println("解析 modinfo.lua 出错:", mod_id, err)
+	}
 
 	// 获取所有全局变量
 	global := L.Get(lua.GlobalsIndex).(*lua.LTable)
@@ -505,8 +475,9 @@ func SubscribeModByModId(modId, lang string) (model.ModInfo, error, int) {
 			ModConfig:     modConfig,
 		}
 
-		db := database.DB
-		db.Create(&newModInfo)
+		if err := UpsertModInfo(&newModInfo); err != nil {
+			return newModInfo, err, 0
+		}
 		return newModInfo, nil, 0
 	}
 
@@ -565,7 +536,8 @@ func SubscribeModByModId(modId, lang string) (model.ModInfo, error, int) {
 	consumer_appid := data2["consumer_appid"].(float64)
 
 	if modInfo, ok := getModInfoConfig2(modId); ok {
-		if last_time == modInfo.LastTime {
+		// 配置为空的记录（历史解析失败遗留）即使时间戳一致也重新解析，否则空配置永远无法恢复
+		if last_time == modInfo.LastTime && modInfo.ModConfig != "" && modInfo.ModConfig != "{}" {
 			return modInfo, nil, 0
 		}
 
@@ -625,8 +597,9 @@ func SubscribeModByModId(modId, lang string) (model.ModInfo, error, int) {
 		ModConfig:     modConfig,
 	}
 
-	db := database.DB
-	db.Create(&newModInfo)
+	if err := UpsertModInfo(&newModInfo); err != nil {
+		return newModInfo, err, 0
+	}
 	return newModInfo, nil, 0
 }
 
@@ -666,6 +639,31 @@ func getVersion(tags interface{}) string {
 	return ""
 }
 
+// installCdnZip CDN 安装:解压 zip 归位到统一模组目录并完成收尾登记
+// (游戏侧 ACF 登记 + legacy bin 预置)。返回 zipReader 供调用方继续提取 modinfo。
+func installCdnZip(zipBytes []byte, modid, fileURL string) (*zip.Reader, error) {
+	zipReader, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return nil, err
+	}
+	modDir := filepath.Join(dstUtils.GetUgcModPath(), "content", "322330", modid)
+	UnzipToDir(zipReader, modDir)
+	// CDN 解压安装同样要登记游戏侧 acf,否则游戏判"待下载"而不启用该模组
+	if err := RegisterInstalledBest(modid, modDir, fileURL, 0); err != nil {
+		return nil, errors.New("游戏侧登记失败: " + err.Error())
+	}
+	// 预置 legacy bin:游戏对无法按 manifest 认领的模组走"下载→解包 <ugchandle>_legacy.bin",
+	// 文件缺失时解包失败(UMFD failed to open file),模组整个不启用
+	if err := WriteLegacyBin(modDir, UgchandleFromURL(fileURL), zipBytes); err != nil {
+		log.Println("[legacy-bin] 预置失败:", modid, err)
+	}
+	// 收尾验收:ACF 登记有效或 legacy bin 在位,不过则整体报错(下载完成=游戏可用)
+	if err := verifyGameReadyFn(modid, modDir); err != nil {
+		return nil, errors.New("安装收尾验收失败: " + err.Error())
+	}
+	return zipReader, nil
+}
+
 func get_v1_mod_info_config(lang, modid, file_url string) map[string]interface{} {
 	log.Println("开始下载 v1 mod，并提取 modinfo.lua 文件")
 	// 0: 下载失败, 1: 下载成功, 2: mod 中没有 modinfo.lua 文件
@@ -700,12 +698,11 @@ func get_v1_mod_info_config(lang, modid, file_url string) map[string]interface{}
 		return make(map[string]interface{})
 	}
 	log.Println(file_url, "下载成功，开始解压")
-	zipReader, err := zip.NewReader(bytes.NewReader(tmp.Bytes()), int64(tmp.Len()))
+	zipReader, err := installCdnZip(tmp.Bytes(), modid, file_url)
 	if err != nil {
 		log.Panicln("模组zip 解压失败")
 		return make(map[string]interface{})
 	}
-	UnzipToDir(zipReader, filepath.Join(dstUtils.GetUgcModPath(), "content", "322330", modid))
 	for _, file := range zipReader.File {
 		switch file.Name {
 		case "modinfo.lua":
@@ -842,12 +839,14 @@ func AddModInfo(lang, modid string) {
 		oldModinfo.Img = modInfo.Img
 		oldModinfo.V = modInfo.V
 		oldModinfo.ModConfig = modConfig
-		db := database.DB
-		db.Save(&oldModinfo)
+		if err := UpsertModInfo(&oldModinfo); err != nil {
+			log.Println("mod info save error: ", err)
+		}
 	} else {
 		modInfo.ModConfig = modConfig
-		db := database.DB
-		db.Create(&modInfo)
+		if err := UpsertModInfo(&modInfo); err != nil {
+			log.Println("mod info save error: ", err)
+		}
 	}
 
 }
@@ -869,8 +868,9 @@ func GetLocalModInfo(lang, modId string) (model.ModInfo, error, int) {
 		ModConfig:     modConfig,
 	}
 
-	db := database.DB
-	db.Create(&newModInfo)
+	if err := UpsertModInfo(&newModInfo); err != nil {
+		return newModInfo, err, 0
+	}
 	return newModInfo, nil, 0
 }
 
