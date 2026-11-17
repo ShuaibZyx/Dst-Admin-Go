@@ -20,25 +20,26 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 	defer lock.Unlock()
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 
-	// TODO 关闭之前的世界
-	gameService.StopGame(cluster.ClusterName)
-
-	// 创建备份
-	backupService.CreateBackup(cluster.ClusterName, "")
-
 	name := ctx.DefaultQuery("name", "default")
 	log.Println(name)
 
+	// 先做无副作用校验（模板存在性/IA 闸门），通过后再停服备份——避免误操作先把世界杀了
 	if !fileUtils.Exists("./static/preinstall/" + name) {
 		abort500f(ctx, "./static/preinstall/"+name, "不存在，请先添加")
 		return
 	}
 
-	// 闸门:预设含海难/火山世界时要求已订阅 IA 模组(在停游戏/备份前拦截)
+	// 闸门:预设含海难/火山世界时要求已订阅 IA 模组
 	if err := mod.CheckIADirGate(cluster.ClusterName, "./static/preinstall/"+name); err != nil {
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
+
+	// 关闭之前的世界
+	gameService.StopGame(cluster.ClusterName)
+
+	// 创建备份（替换前自动保存存档，取代"请自行备份"的提示）
+	backupService.CreateBackup(cluster.ClusterName, "")
 
 	path := dstUtils.GetClusterBasePath(cluster.ClusterName)
 	bakpath := filepath.Join(dstUtils.GetKleiDstPath(), "bak")

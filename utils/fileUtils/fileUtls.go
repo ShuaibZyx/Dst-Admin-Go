@@ -208,9 +208,52 @@ func DeleteDir(path string) error {
 	return err
 }
 
-func Rename(filePath, newName string) (err error) {
-	err = os.Rename(filePath, newName)
-	return
+// Rename 移动文件/目录到新路径。
+// os.Rename 跨卷必然失败（Windows 不同盘符、Unix EXDEV）——回退为流式复制+删除，
+// 使面板/存档/备份分处不同磁盘时（如 D 盘面板配 C 盘存档）仍可移动，不再依赖"全部放 C 盘"。
+func Rename(filePath, newName string) error {
+	if err := os.Rename(filePath, newName); err == nil {
+		return nil
+	}
+	if err := copyTo(filePath, newName); err != nil {
+		return err
+	}
+	return os.RemoveAll(filePath)
+}
+
+// copyTo 递归复制 src 到 dst（dst 是完整目标路径；不同于 Copy 的"复制进目录"语义）
+func copyTo(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, info.Mode()); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if err := copyTo(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 func FindWorldDirs(rootPath string) ([]string, error) {
