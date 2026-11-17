@@ -217,6 +217,30 @@ def parse_customize():
     return out
 
 
+def parse_desc_tables():
+    """解析 customize.lua 里所有字面量值域表：{ text = STRINGS.UI.X.Y, data = "v" } 列表。
+    函数型 desc（tasksets/startlocations）不在此列，由 SPECIAL 处理。"""
+    z = zipfile.ZipFile(os.path.join(GAME_DATA, r'databundles\scripts.zip'))
+    src = _strip(z.read('scripts/map/customize.lua').decode('utf-8', 'replace'))
+    out = {}
+    pos = 0
+    while True:
+        m = re.search(r'(?:local\s+)?([a-z_0-9]+)\s*=\s*(?=\{)', src[pos:])
+        if not m:
+            break
+        name = m.group(1)
+        body, consumed = _balanced(src[pos + m.end():])
+        entries = re.findall(r'text\s*=\s*([^,{]+?)\s*,\s*data\s*=\s*"([^"]*)"', body)
+        if not entries:
+            entries = [(t, v) for v, t in re.findall(r'data\s*=\s*"([^"]*)"\s*,\s*text\s*=\s*([^,{]+?)(?=,|\n)', body)]
+
+        # 条件分支会多次赋值（如 IsConsole 变体）；PC 版恒为条目更多者
+        if entries and (name not in out or len(entries) > len(out[name])):
+            out[name] = entries
+        pos += m.end() + consumed
+    return out
+
+
 def parse_vanilla_whitelists():
     """IA 把这些原版项扩展进岛屿/火山世界。"""
     src = open(os.path.join(MODS, '1467214795', 'modservercreationmain.lua'), encoding='utf-8', errors='replace').read()
@@ -376,6 +400,27 @@ def main():
         ('volcano', 'start_location'): ({'volcano_default': '火山'}, {'volcano_default': 'Volcano'}),
     }
 
+    # 按键强制官方值域（旧目录数据受历史 bug 污染时以注册定义为准）
+    SPECIAL_BY_KEY = {'shipwrecked_season_start': 'ssw'}
+
+    DESC_TABLES = parse_desc_tables()
+
+    def desc_from_table(lang, name):
+        """desc 变量 → 值域表 → {data: po 标签}。text 表达式支持 STRINGS 引用拼接（如 day 的 "长 .. 白天"）。"""
+        tbl = name and DESC_TABLES.get(name)
+        if not tbl:
+            return None
+        labels = po_zh if lang == 'zh' else po_en
+
+        def expand(expr):
+            def sub(m):
+                return labels.get('STRINGS.' + m.group(1)) or m.group(1)
+            out = re.sub(r'STRINGS\.([A-Z0-9_]+(?:\.[A-Z0-9_]+)*)', sub, expr)
+            out = out.replace('..', ' ').replace('"', '').strip()
+            return re.sub(r'\s+', ' ', out)
+
+        return {data: expand(expr) or data for expr, data in tbl}
+
     # 名称解析（zh/en）
     def names_for(key, mod):
         if mod == 'vanilla':
@@ -455,8 +500,10 @@ def main():
                         sp = SPECIAL_DESC.get((world, key))
                         if sp:
                             desc = sp[0] if lang == 'zh' else sp[1]
+                        elif key in SPECIAL_BY_KEY:
+                            desc = domain_map(lang, SPECIAL_BY_KEY[key], world)  # 官方值域，覆盖旧数据
                         else:
-                            desc = (data or {}).get('desc') or domain_map(lang, domain, world)
+                            desc = desc_from_table(lang, it.get('desc_var')) or (data or {}).get('desc') or domain_map(lang, domain, world)
                         value = it['value']
                         if desc and value not in desc:
                             value = list(desc)[0] if desc else value
