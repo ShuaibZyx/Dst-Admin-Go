@@ -343,9 +343,6 @@ func (m *ModApi) AddModInfoFile(ctx *gin.Context) {
 }
 
 // UploadModFile 手动添加模组
-func (m *ModApi) UploadModFile(ctx *gin.Context) {
-
-}
 
 type WorkshopItemDetail struct {
 	WorkShopId  string  `json:"workshopId"`
