@@ -48,6 +48,7 @@ DESCVAR2DOMAIN = {
     'speed_descriptions': 'speed6', 'enableddisabled_descriptions': 'ed',
     'yesno_descriptions': 'yesno', 'season_length_descriptions': 'slen',
     'extraevent_descriptions': 'ee', 'starting_swaps_descriptions': 'swap',
+    'shipwrecked_season_start_descriptions': 'ssw',
     'ocean_worldgen_frequency_descriptions': 'wfreq8', 'ocean_yesno_descriptions': 'yesno',
     'petrification_descriptions': 'freq5', 'disease_descriptions': 'freq5',
 }
