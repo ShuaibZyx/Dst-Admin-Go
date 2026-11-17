@@ -28,8 +28,9 @@ PUB_JSON = os.path.join(ROOT, r'dst-admin-web\public\misc\dst_world_setting.json
 REG_JSON = os.path.join(ROOT, r'dst-admin-web\src\types\modWorldOptions.json')
 
 LOC = {'forest': 'forest', 'cave': 'cave', 'shipwrecked': 'shipwrecked', 'volcano': 'volcanoworld'}
-# 截图定案：森林/海难为 master 语境（显示 master_controlled 项），洞穴/火山不显示
-MASTER_CTX = {'forest': True, 'shipwrecked': True, 'cave': False, 'volcano': False}
+# master_controlled 项（季节长度/中毒/起始季节等）不再按世界名固化：
+# 目录全量收录并打 master 标记，运行时按 集群主世界(server_ini.is_master) 决定显隐——游戏同款语义
+# （IsMasterLevel = location_index==1，即集群第一/主世界才显示）。
 
 # ---------------------------------------------------------------- 值域（zh/en 标签）
 DOMAIN_KEYS = {
@@ -63,40 +64,18 @@ SW_SEASON_START = ('ssw', [('SHIPWRECKED_DEFAULT', 'default'), ('HURRICANE', 'we
                            ('RANDOM', 'mild|wet|green|dry')])
 
 # 各世界/页签的分类（顺序与文案=用户截图）
-STRUCT = {
-    'forest': {
-        'WORLDSETTINGS': [('global', '全局', 'Global', 0), ('events', '活动', 'Events', 1), ('survivors', '冒险家', 'Survivors', 2),
-                          ('misc', '世界', 'World', 3), ('resources', '资源再生', 'Resource Regrowth', 4),
-                          ('portal_resources', '非自然传送门资源', 'Unnatural Portal Resources', 5), ('animals', '生物', 'Creatures', 6),
-                          ('monsters', '敌对生物', 'Hostile Creatures', 7), ('giants', '巨兽', 'Giants', 8),
-                          ('lunar_mutations', '月亮变异', 'Lunar Mutations', 9)],
-        'WORLDGEN': [('global', '全局', 'Global', 0), ('misc', '世界', 'World', 1), ('resources', '资源', 'Resources', 2),
-                     ('animals', '生物以及刷新点', 'Creatures and Spawners', 3),
-                     ('monsters', '敌对生物以及刷新点', 'Hostile Creatures and Spawners', 4)],
-    },
-    'cave': {
-        'WORLDSETTINGS': [('misc', '世界', 'World', 0), ('resources', '资源再生', 'Resource Regrowth', 1), ('animals', '生物', 'Creatures', 2),
-                          ('monsters', '敌对生物', 'Hostile Creatures', 3), ('giants', '巨兽', 'Giants', 4),
-                          ('lunar_mutations', '月亮变异', 'Lunar Mutations', 5)],
-        'WORLDGEN': [('misc', '世界', 'World', 0), ('resources', '资源', 'Resources', 1),
-                     ('animals', '生物以及刷新点', 'Creatures and Spawners', 2),
-                     ('monsters', '敌对生物以及刷新点', 'Hostile Creatures and Spawners', 3)],
-    },
-    'shipwrecked': {
-        'WORLDSETTINGS': [('global', '全局', 'Global', 0), ('events', '活动', 'Events', 1), ('survivors', '冒险家', 'Survivors', 2),
-                          ('misc', '世界', 'World', 3), ('resources', '资源再生', 'Resource Regrowth', 4), ('animals', '生物', 'Creatures', 5),
-                          ('monsters', '敌对生物', 'Hostile Creatures', 6), ('giants', '巨兽', 'Giants', 7)],
-        'WORLDGEN': [('global', '全局', 'Global', 0), ('misc', '世界', 'World', 1), ('resources', '资源', 'Resources', 2),
-                     ('animals', '生物以及刷新点', 'Creatures and Spawners', 3),
-                     ('monsters', '敌对生物以及刷新点', 'Hostile Creatures and Spawners', 4)],
-    },
-    'volcano': {
-        'WORLDSETTINGS': [('misc', '世界', 'World', 0), ('resources', '资源再生', 'Resource Regrowth', 1), ('animals', '生物', 'Creatures', 2),
-                          ('monsters', '敌对生物', 'Hostile Creatures', 3), ('giants', '巨兽', 'Giants', 4)],
-        'WORLDGEN': [('misc', '世界', 'World', 0), ('resources', '资源', 'Resources', 1),
-                     ('monsters', '敌对生物以及刷新点', 'Hostile Creatures and Spawners', 2)],
-    },
-}
+# 分类骨架四世界统一（文案/顺序）；各世界内容由 world 过滤 + master 标记塑造，
+# master 项渲染端按集群主世界(is_master)显隐——与游戏 location_index==1 同语义
+CATS_WGS = [('global', '全局', 'Global', 0), ('events', '活动', 'Events', 1), ('survivors', '冒险家', 'Survivors', 2),
+            ('misc', '世界', 'World', 3), ('resources', '资源再生', 'Resource Regrowth', 4),
+            ('portal_resources', '非自然传送门资源', 'Unnatural Portal Resources', 5), ('animals', '生物', 'Creatures', 6),
+            ('monsters', '敌对生物', 'Hostile Creatures', 7), ('giants', '巨兽', 'Giants', 8),
+            ('lunar_mutations', '月亮变异', 'Lunar Mutations', 9)]
+CATS_WGN = [('global', '全局', 'Global', 0), ('misc', '世界', 'World', 1), ('resources', '资源', 'Resources', 2),
+            ('animals', '生物以及刷新点', 'Creatures and Spawners', 3),
+            ('monsters', '敌对生物以及刷新点', 'Hostile Creatures and Spawners', 4)]
+STRUCT = {w: {'WORLDSETTINGS': CATS_WGS, 'WORLDGEN': CATS_WGN}
+          for w in ('forest', 'cave', 'shipwrecked', 'volcano')}
 
 # 模组图集 → 面板图片 URL（static 目录里已转好）
 ATLAS_URL = {
@@ -383,8 +362,6 @@ def main():
         loc = LOC[world]
         if it['world'] is not None and loc not in it['world']:
             return False
-        if it['master'] and not MASTER_CTX[world]:
-            return False
         return True
 
     # 名称解析（zh/en）
@@ -480,6 +457,8 @@ def main():
                             entry['desc'] = desc
                         if it.get('order') is not None:
                             entry['order'] = it['order']
+                        if it['master']:
+                            entry['master'] = True
                         citems[key] = entry
                     # 排序：显式 order 优先，之后按显示名（与游戏 stringidsorter 同效）
                     def sort_key(kv):
@@ -531,12 +510,12 @@ def main():
     expect = {
         ('zh', 'forest', 'WORLDSETTINGS'): {'global': 13, 'events': 13, 'survivors': 11, 'misc': 15, 'resources': 12, 'portal_resources': 6, 'animals': 15, 'monsters': 14, 'giants': 16, 'lunar_mutations': 11},
         ('zh', 'forest', 'WORLDGEN'): {'global': 1, 'misc': 14, 'resources': 26, 'animals': 13, 'monsters': 10},
-        ('zh', 'cave', 'WORLDSETTINGS'): {'misc': 8, 'resources': 9, 'animals': 11, 'monsters': 13, 'giants': 5, 'lunar_mutations': 4},
-        ('zh', 'cave', 'WORLDGEN'): {'misc': 9, 'resources': 17, 'animals': 5, 'monsters': 7},
+        ('zh', 'cave', 'WORLDSETTINGS'): {'global': 13, 'events': 13, 'survivors': 11, 'misc': 8, 'resources': 10, 'animals': 11, 'monsters': 13, 'giants': 5, 'lunar_mutations': 4},
+        ('zh', 'cave', 'WORLDGEN'): {'global': 1, 'misc': 9, 'resources': 17, 'animals': 5, 'monsters': 7},
         ('zh', 'shipwrecked', 'WORLDSETTINGS'): {'global': 18, 'events': 13, 'survivors': 11, 'misc': 15, 'resources': 17, 'animals': 18, 'monsters': 11, 'giants': 11},
         ('zh', 'shipwrecked', 'WORLDGEN'): {'global': 2, 'misc': 12, 'resources': 33, 'animals': 14, 'monsters': 9},
-        ('zh', 'volcano', 'WORLDSETTINGS'): {'misc': 5, 'resources': 5, 'animals': 7, 'monsters': 5, 'giants': 4},
-        ('zh', 'volcano', 'WORLDGEN'): {'misc': 2, 'resources': 6, 'monsters': 1},
+        ('zh', 'volcano', 'WORLDSETTINGS'): {'global': 18, 'events': 13, 'survivors': 11, 'misc': 5, 'resources': 6, 'animals': 7, 'monsters': 5, 'giants': 4},
+        ('zh', 'volcano', 'WORLDGEN'): {'global': 2, 'misc': 2, 'resources': 6, 'monsters': 1},
     }
     print('== 静态目录条目数对账（zh，期望=截图口径）==')
     ok = True
