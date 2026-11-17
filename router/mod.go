@@ -9,9 +9,6 @@ func initModRouter(router *gin.RouterGroup) {
 
 	modApi := api.ModApi{}
 	mod := router.Group("/api/mod")
-	luaJitApi := api.LuaJitApi{}
-	mod.GET("/luajit", luaJitApi.Get)
-	mod.POST("/luajit", luaJitApi.Set)
 	{
 		mod.GET("/search", modApi.SearchModList)
 		mod.GET("/subscribed/:modId", modApi.GetModSubscribed)
