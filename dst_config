@@ -7,5 +7,5 @@ persistent_storage_root=
 cluster=ROGIA
 backup=backups
 mod_download_path=mods
-bin=64
+bin=100
 beta=0

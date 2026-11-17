@@ -104,6 +104,15 @@ func (g *WindowsGameService) killLevel(clusterName, level string) {
 func (g *WindowsGameService) LaunchLevel(clusterName, level string, bin, beta int) {
 	// 启动前同步下载该存档所需模组（已存在跳过）
 	StartLog.Logf("启动 %s/%s (bin=%d beta=%d)", clusterName, level, bin, beta)
+	// bin=LuaJIT（100）：自动下载并启用 LuaJIT 模组（dontstarveluajit2）——只用模组方案，不替换游戏二进制
+	if bin == 100 {
+		StartLog.Logf("[LuaJIT] 自动下载并启用模组 %s", mod.LuaJitModId)
+		if err := mod.DownloadModToUnified(mod.LuaJitModId, nil); err != nil {
+			StartLog.Logf("[LuaJIT] 模组下载失败: %s", err)
+		} else if err := mod.EnsureLuaJitModInFile(dstUtils.GetLevelModoverridesPath(clusterName, level), true); err != nil {
+			StartLog.Logf("[LuaJIT] 启用失败: %s", err)
+		}
+	}
 	StartLog.Progress(6, "模组同步 %s", level)
 	if n, err := mod.EnsureClusterMods(clusterName, func(s string) { StartLog.Logf("[模组] %s", s) }); err != nil {
 		StartLog.Logf("[模组] 下载失败: %s", err)

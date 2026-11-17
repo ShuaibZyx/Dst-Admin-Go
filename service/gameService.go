@@ -243,6 +243,16 @@ func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
 		StartLog.Logf("[模组] 本次同步下载 %d 个", n)
 	}
 
+	// bin=LuaJIT（100）：自动下载并启用 LuaJIT 模组（dontstarveluajit2）——只用模组方案
+	if bin == 100 {
+		StartLog.Logf("[LuaJIT] 自动下载并启用模组 %s", mod.LuaJitModId)
+		if err := mod.DownloadModToUnified(mod.LuaJitModId, nil); err != nil {
+			StartLog.Logf("[LuaJIT] 模组下载失败: %s", err)
+		} else if err := mod.EnsureLuaJitModInFile(dstUtils.GetLevelModoverridesPath(clusterName, level), true); err != nil {
+			StartLog.Logf("[LuaJIT] 启用失败: %s", err)
+		}
+	}
+
 	// 闸门:海难/火山世界未订阅 IA 模组时拒绝拉起(StartGame 批量拉起走这里)
 	if err := mod.CheckIAWorldStart(clusterName, level); err != nil {
 		log.Println("跳过拉起世界:", clusterName, level, err)
@@ -281,7 +291,8 @@ func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
 	} else if bin == consts.BinX64 {
 		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
 	} else if bin == consts.BinLuaJIT {
-		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64_luajit -console -cluster " + clusterName + " -shard " + level
+		// 只用模组方案（dontstarveluajit2）：不替换游戏二进制，与 64 位同 exe
+		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
 	} else if bin == consts.BinBox86 {
 		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box86 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
 	} else if bin == consts.BinBox64 {
