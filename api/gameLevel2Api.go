@@ -370,7 +370,7 @@ func (g *GameLevel2Api) StartAll(ctx *gin.Context) {
 		}
 	}
 
-	service.StartLog.Progress(4, "配置检查通过, 逐个拉起世界")
+	service.StartLog.Progress(4, "配置检查通过, 逐个拉起全部世界")
 	go func() {
 		defer endLevelOp(opKey)
 		gameService.StartGame(clusterName)
