@@ -67,7 +67,7 @@ func (g *GameLevel2Service) GetLevelList(clusterName string) []level.World {
 				})
 				cavesLevel := homeServe.GetLevel(clusterName, "Caves")
 				caves := level.World{
-					IsMaster:          true,
+					IsMaster:          false,
 					LevelName:         "洞穴",
 					Uuid:              "Caves",
 					Leveldataoverride: cavesLevel.Leveldataoverride,
@@ -139,6 +139,13 @@ func (g *GameLevel2Service) CreateLevel(clusterName string, level *level.World) 
 		uuid = generateUUID()
 	} else {
 		uuid = level.Uuid
+	}
+	// 目录名即 uuid：必须合法（防 ../ 等路径穿越拼进集群目录）且不与既有世界目录撞名
+	if !fileUtils.ValidName(uuid) {
+		return fmt.Errorf("invalid uuid %q", uuid)
+	}
+	if fileUtils.Exists(filepath.Join(dstUtils.GetClusterBasePath(clusterName), uuid)) {
+		return fmt.Errorf("世界目录已存在 %q", uuid)
 	}
 	// 回填 uuid，保证响应与自动任务拿到真实目录名（此前空 uuid 会原样回传）
 	level.Uuid = uuid
