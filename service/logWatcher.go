@@ -57,12 +57,17 @@ var logWatchers sync.Map // logPath -> *logWatch
 // LogSessionFor 获取日志文件的广播会话（首个请求创建 watcher 常驻任务）
 func LogSessionFor(logPath string) *LiveSession {
 	if v, ok := logWatchers.Load(logPath); ok {
-		return v.(*logWatch).session
+		// 命中缓存也要确保 runner 活着：会话死过一次后 Attach 会返回已关通道
+		w := v.(*logWatch)
+		w.session.Start(func(send func(string)) {
+			w.run(logPath)
+		})
+		return w.session
 	}
 	w := &logWatch{session: NewLiveSession()}
 	actual, loaded := logWatchers.LoadOrStore(logPath, w)
 	if loaded {
-		return actual.(*logWatch).session
+		w = actual.(*logWatch)
 	}
 	// Start 标记会话活跃（run 永不退出=常驻），否则 Attach 会把订阅通道立即关闭
 	w.session.Start(func(send func(string)) {
@@ -71,13 +76,25 @@ func LogSessionFor(logPath string) *LiveSession {
 	return w.session
 }
 
-// run 常驻：fsnotify 事件驱动 + 3 秒兜底轮询（防事件合并/丢失）
+// run 常驻：fsnotify 事件驱动 + 3 秒兜底轮询（防事件合并/丢失）。
+// 永不退出：fsnotify 在 Windows 高频写入下会缓冲溢出并关闭 Events/Errors 通道
+// （游戏日志写入正属此列），一旦退出 LiveSession 会关闭所有订阅通道、把 SSE 长连接拉断，
+// 故监听死亡时重建而不是结束。
 func (w *logWatch) run(logPath string) {
+	for {
+		if !w.watchOnce(logPath) {
+			time.Sleep(2 * time.Second) // 退避后重建监听
+		}
+	}
+}
+
+// watchOnce 单次监听会话；监听通道关闭（fsnotify 死亡）时返回 false
+func (w *logWatch) watchOnce(logPath string) bool {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Println("[logwatch] 创建监听失败, 退回轮询:", err)
 		w.pollLoop(logPath)
-		return
+		return true // pollLoop 永不返回
 	}
 	defer watcher.Close()
 	// 文件可能还不存在（世界未启动）：监听所在目录的创建事件来补挂
@@ -88,7 +105,7 @@ func (w *logWatch) run(logPath string) {
 		select {
 		case ev, ok := <-watcher.Events:
 			if !ok {
-				return
+				return false
 			}
 			// 轮转（Create/Remove/Rename）后重挂并从头读；Write 读增量
 			if ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) != 0 {
@@ -96,12 +113,14 @@ func (w *logWatch) run(logPath string) {
 				w.offset = 0
 				w.mu.Unlock()
 				_ = watcher.Remove(logPath)
-				_ = watcher.Add(logPath)
+				if err := watcher.Add(logPath); err != nil {
+					return false // 重挂失败（文件瞬时不在）：整体重建
+				}
 			}
 			w.push(logPath)
 		case _, ok := <-watcher.Errors:
 			if !ok {
-				return
+				return false
 			}
 		case <-fallback.C:
 			w.push(logPath) // 兜底：事件丢失/合并时补读

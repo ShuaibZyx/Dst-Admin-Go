@@ -146,11 +146,7 @@ func (g *GameLevel2Api) GetStatus(ctx *gin.Context) {
 var statusStreams sync.Map
 
 func statusStreamFor(clusterName string) *service.LiveSession {
-	if v, ok := statusStreams.Load(clusterName); ok {
-		return v.(*service.LiveSession)
-	}
-	s := service.NewLiveSession()
-	s.Start(func(send func(string)) {
+	run := func(send func(string)) {
 		// 常驻推送：2 秒采样一次，但同载荷去重（无变化不推）——
 		// 状态帧含各层 Lua 全文约 20KB，重复心跳纯浪费且挤前端渲染
 		cs := &service.ChangeSender{}
@@ -161,7 +157,15 @@ func statusStreamFor(clusterName string) *service.LiveSession {
 			}
 			time.Sleep(2 * time.Second)
 		}
-	})
+	}
+	if v, ok := statusStreams.Load(clusterName); ok {
+		// runner 死过（panic 恢复等）后 Attach 返回已关通道，命中缓存时补拉起
+		s := v.(*service.LiveSession)
+		s.Start(run)
+		return s
+	}
+	s := service.NewLiveSession()
+	s.Start(run)
 	actual, _ := statusStreams.LoadOrStore(clusterName, s)
 	return actual.(*service.LiveSession)
 }

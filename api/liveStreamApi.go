@@ -38,15 +38,13 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 	statusBacklog, statusCh, statusUnsub := statusStreamFor(clusterName).Attach()
 	logBacklog, logCh, logUnsub := service.LogSessionFor(logPath).Attach()
 	startBacklog, startCh, startUnsub := service.StartLog.Attach()
-	defer statusUnsub()
-	defer logUnsub()
-	defer startUnsub()
 
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
 
-	// backlog（历史）按类分帧输出；log 只取尾部 40 行（首屏上下文）
+	// backlog（历史）按类分帧输出；log 只取尾部 40 行（首屏上下文）。
+	// startlog 历史帧用 startlog-hist：前端据此区分"历史只进文本"与"实时驱动进度条"
 	for _, l := range statusBacklog {
 		_, _ = fmt.Fprintf(ctx.Writer, "event: status\ndata: %s\n\n", l)
 	}
@@ -60,7 +58,7 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 		}
 	}
 	for _, l := range startBacklog {
-		_, _ = fmt.Fprintf(ctx.Writer, "event: startlog\ndata: %s\n\n", l)
+		_, _ = fmt.Fprintf(ctx.Writer, "event: startlog-hist\ndata: %s\n\n", l)
 	}
 	ctx.Writer.Flush()
 
@@ -84,30 +82,56 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 		}
 	}()
 
-	// 转发循环
+	// 退出时统一退订（reprobe 会重挂并改写 unsub 变量,故用闭包取当前值）
+	defer func() {
+		statusUnsub()
+		logUnsub()
+		startUnsub()
+	}()
+
+	// 转发循环：任一订阅源结束只停用该源（置 nil 后 select 忽略该 case），
+	// 绝不 return——旧写法 `if !ok { return }` 会把整条 SSE 长连接拉断
+	// （浏览器反复重连、面板"不输出日志"的根因）。
+	reprobe := time.NewTicker(3 * time.Second)
+	defer reprobe.Stop()
 	for {
 		select {
 		case l, ok := <-statusCh:
 			if !ok {
-				return
+				statusCh = nil
+				continue
 			}
 			_, _ = fmt.Fprintf(ctx.Writer, "event: status\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
 		case l, ok := <-logCh:
 			if !ok {
-				return
+				logCh = nil
+				continue
 			}
 			_, _ = fmt.Fprintf(ctx.Writer, "event: log\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
 		case l, ok := <-startCh:
 			if !ok {
-				return
+				startCh = nil
+				continue
 			}
 			_, _ = fmt.Fprintf(ctx.Writer, "event: startlog\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
 		case l := <-sysCh:
 			_, _ = fmt.Fprintf(ctx.Writer, "event: sysinfo\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
+		case <-reprobe.C:
+			// 停用的源在恢复后重挂（Attach/会话已确保拉起;跳过 backlog 防重复帧）
+			if statusCh == nil {
+				if _, c, un := statusStreamFor(clusterName).Attach(); c != nil {
+					statusCh, statusUnsub = c, un
+				}
+			}
+			if logCh == nil {
+				if _, c, un := service.LogSessionFor(logPath).Attach(); c != nil {
+					logCh, logUnsub = c, un
+				}
+			}
 		case <-ctx.Request.Context().Done():
 			return
 		}
