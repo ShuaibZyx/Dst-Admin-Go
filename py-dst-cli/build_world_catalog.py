@@ -484,6 +484,15 @@ def main():
                 result[lang][world][group_key] = outg
                 stat.append((lang, world, tab, {c: len(outg[c]['items']) for c in outg}))
 
+    # 游戏不展示的杂项键（WORLDGEN_MISC/WORLDSETTINGS_MISC 家族 + 预设书签等），渲染端直接隐藏
+    hidden_keys = set()
+    z2 = zipfile.ZipFile(os.path.join(GAME_DATA, r'databundles\scripts.zip'))
+    src2 = _strip(z2.read('scripts/map/customize.lua').decode('utf-8', 'replace'))
+    for fam in ('WORLDGEN_MISC', 'WORLDSETTINGS_MISC'):
+        m = re.search(r'local %s = \{(.*?)\}' % fam, src2, re.S)
+        if m:
+            hidden_keys |= set(re.findall(r'"([a-z0-9_]+)"', m.group(1)))
+
     # 运行时注册表（森林/洞穴等静态目录之外的模组项；渲染端：文件里有该键才显示）
     for key, it in registry.items():
         am = atlas_of(it['atlas'])
@@ -504,7 +513,7 @@ def main():
     domains = {}
     for dom in set(e['descDomain'] for e in reg_out.values()):
         domains[dom] = {'zh': domain_map('zh', dom, 'forest') or {}, 'en': domain_map('en', dom, 'forest') or {}}
-    json.dump({'domains': domains, 'options': reg_out}, io.open(REG_JSON, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    json.dump({'hiddenKeys': sorted(hidden_keys), 'domains': domains, 'options': reg_out}, io.open(REG_JSON, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
     # 对账打印（截图口径）
     expect = {
