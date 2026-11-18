@@ -1,6 +1,7 @@
 package api
 
 import (
+	"regexp"
 	"dst-admin-go/constant/consts"
 	"dst-admin-go/model"
 	"dst-admin-go/service"
@@ -41,14 +42,24 @@ type ClusterIni struct {
 }
 
 type LevelInfo struct {
-	Ps                *vo.DstPsVo      `json:"Ps"`
-	Status            bool             `json:"status"`
-	LevelName         string           `json:"levelName"`
-	IsMaster          bool             `json:"is_master"`
-	Uuid              string           `json:"uuid"`
-	Leveldataoverride string           `json:"leveldataoverride"`
-	Modoverrides      string           `json:"modoverrides"`
-	ServerIni         *level.ServerIni `json:"server_ini"`
+	Ps        *vo.DstPsVo      `json:"Ps"`
+	Status    bool             `json:"status"`
+	LevelName string           `json:"levelName"`
+	IsMaster  bool             `json:"is_master"`
+	Uuid      string           `json:"uuid"`
+	Location  string           `json:"location"`
+	ServerIni *level.ServerIni `json:"server_ini"`
+}
+
+// levelLocation 从 leveldataoverride 文本里抠 location——状态帧只带结果不带全文
+// （每帧约 20KB 的 Lua 全文是纯体脂，前端只用到 location/状态/进程信息）
+var locationRe = regexp.MustCompile(`location\s*=\s*"([^"]*)"`)
+
+func levelLocation(leveldataoverride string) string {
+	if m := locationRe.FindStringSubmatch(leveldataoverride); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // GetStatus 获取世界状态
@@ -79,8 +90,7 @@ func queryLevelsStatus(clusterName string) []LevelInfo {
 					LevelName:         world.LevelName,
 					IsMaster:          world.IsMaster,
 					Uuid:              world.Uuid,
-					Leveldataoverride: world.Leveldataoverride,
-					Modoverrides:      world.Modoverrides,
+					Location:          levelLocation(world.Leveldataoverride),
 					ServerIni:         world.ServerIni,
 				}
 			}(i)
@@ -96,8 +106,7 @@ func queryLevelsStatus(clusterName string) []LevelInfo {
 			LevelName:         world.LevelName,
 			IsMaster:          world.IsMaster,
 			Uuid:              world.Uuid,
-			Leveldataoverride: world.Leveldataoverride,
-			Modoverrides:      world.Modoverrides,
+			Location:          levelLocation(world.Leveldataoverride),
 			ServerIni:         world.ServerIni,
 		}
 	}

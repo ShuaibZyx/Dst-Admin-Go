@@ -1,6 +1,7 @@
 package api
 
 import (
+	"sync"
 	"dst-admin-go/service"
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstUtils"
@@ -38,6 +39,7 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 	statusBacklog, statusCh, statusUnsub := statusStreamFor(clusterName).Attach()
 	logBacklog, logCh, logUnsub := service.LogSessionFor(logPath).Attach()
 	startBacklog, startCh, startUnsub := service.StartLog.Attach()
+	sysBacklog, sysCh, sysUnsub := sysinfoStreamFor(clusterName).Attach()
 
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
@@ -60,33 +62,19 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 	for _, l := range startBacklog {
 		_, _ = fmt.Fprintf(ctx.Writer, "event: startlog-hist\ndata: %s\n\n", l)
 	}
+	for _, l := range sysBacklog {
+			_, _ = fmt.Fprintf(ctx.Writer, "event: sysinfo\ndata: %s\n\n", l)
+	}
 	ctx.Writer.Flush()
 
-	// sysinfo 独立 3 秒轮询（系统信息变化慢,不走事件）
-	// 不 close(sysCh)：sysinfo goroutine 靠 ctx.Done 自行退出,close 后 send 会 panic 崩服务
-	sysCh := make(chan string, 4)
-	go func() {
-		for {
-			data, err := json.Marshal(vo.Response{Code: 200, Msg: "success", Data: gameService.GetSystemInfo(clusterName)})
-			if err == nil {
-				select {
-				case sysCh <- string(data):
-				default: // 慢消费者丢弃,不阻塞
-				}
-			}
-			select {
-			case <-ctx.Request.Context().Done():
-				return
-			case <-time.After(3 * time.Second):
-			}
-		}
-	}()
+	// sysinfo 3 秒采样走共享会话（多连接合并为一次系统信息轮询）
 
 	// 退出时统一退订（reprobe 会重挂并改写 unsub 变量,故用闭包取当前值）
 	defer func() {
 		statusUnsub()
 		logUnsub()
 		startUnsub()
+		sysUnsub()
 	}()
 
 	// 转发循环：任一订阅源结束只停用该源（置 nil 后 select 忽略该 case），
@@ -117,10 +105,13 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 			}
 			_, _ = fmt.Fprintf(ctx.Writer, "event: startlog\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
-		case l := <-sysCh:
+		case l, ok := <-sysCh:
+			if !ok {
+				sysCh = nil
+				continue
+			}
 			_, _ = fmt.Fprintf(ctx.Writer, "event: sysinfo\ndata: %s\n\n", l)
 			ctx.Writer.Flush()
-		case <-reprobe.C:
 			// 停用的源在恢复后重挂（Attach/会话已确保拉起;跳过 backlog 防重复帧）
 			if statusCh == nil {
 				if _, c, un := statusStreamFor(clusterName).Attach(); c != nil {
@@ -132,8 +123,39 @@ func (g *GameConsoleApi) LiveStream(ctx *gin.Context) {
 					logCh, logUnsub = c, un
 				}
 			}
+			if sysCh == nil {
+				if _, c, un := sysinfoStreamFor(clusterName).Attach(); c != nil {
+					sysCh, sysUnsub = c, un
+				}
+			}
 		case <-ctx.Request.Context().Done():
 			return
 		}
 	}
+}
+
+// sysinfoStreamFor 按集群共享的系统信息推送会话（3 秒采样 + 同载荷去重）。
+// 旧版每条 SSE 连接各自起 goroutine 轮询系统信息，多面板/多标签时纯浪费。
+var sysinfoStreams sync.Map
+
+func sysinfoStreamFor(clusterName string) *service.LiveSession {
+	run := func(send func(string)) {
+		cs := &service.ChangeSender{}
+		for {
+			data, err := json.Marshal(vo.Response{Code: 200, Msg: "success", Data: gameService.GetSystemInfo(clusterName)})
+			if err == nil && cs.ShouldPush(string(data)) {
+				send(string(data))
+			}
+			time.Sleep(3 * time.Second)
+		}
+	}
+	if v, ok := sysinfoStreams.Load(clusterName); ok {
+		s := v.(*service.LiveSession)
+		s.Start(run)
+		return s
+	}
+	s := service.NewLiveSession()
+	s.Start(run)
+	actual, _ := sysinfoStreams.LoadOrStore(clusterName, s)
+	return actual.(*service.LiveSession)
 }
