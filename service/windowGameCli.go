@@ -157,6 +157,17 @@ func memByPid(pid int32) float64 {
 	return float64(memInfo.RSS) / (1024 * 1024)
 }
 
+// cpuLast 每 pid 的上次 CPU 时间与时刻（差分采样用）
+type cpuSample struct {
+	busy float64
+	at   time.Time
+}
+
+var cpuLast sync.Map // pid -> cpuSample
+
+// cpuByPid 瞬时 CPU%（两次采样差分，零阻塞）。
+// gopsutil 的 Percent(0) 口径是"自进程启动以来的平均占用"（等价于同刻双读差分≈0），
+// 长跑世界恒显 0.0%——面板的采样间隔即差分窗口，这里按 Δbusy/Δwall 计算真实瞬时值。
 func cpuByPid(pid int32) float64 {
 	if pid <= 0 {
 		return 0
@@ -165,13 +176,23 @@ func cpuByPid(pid int32) float64 {
 	if err != nil {
 		return 0
 	}
-	// interval=0: 与上次采样做差,零阻塞。time.Second 会每次采样阻塞 1 秒——
-	// 世界运行时 status 轮询每请求卡 1 秒,连接池占满拖垮整个面板。
-	percent, err := p.Percent(0)
+	t, err := p.Times()
 	if err != nil {
 		return 0
 	}
-	return percent
+	now := time.Now()
+	busy := t.Total()
+	prev, ok := cpuLast.Load(pid)
+	cpuLast.Store(pid, cpuSample{busy: busy, at: now})
+	if !ok {
+		return 0 // 首个样本无差分基准，下一拍即有值
+	}
+	old := prev.(cpuSample)
+	wall := now.Sub(old.at).Seconds()
+	if wall <= 0 {
+		return 0
+	}
+	return (busy - old.busy) / wall * 100
 }
 
 // formatElapsed 时长中文格式化(日志面板"进程运行时长:{{elapsed}}")
@@ -544,15 +565,5 @@ func (receiver *LevelInstance) GetProcessCpuInfo() float64 {
 	if pid <= 0 {
 		return 0
 	}
-	p, err := process.NewProcess(int32(pid))
-	if err != nil {
-		fmt.Println("Error getting process info:", err)
-		return 0
-	}
-	cpuPercent, err := p.Percent(0) // interval=0 差分采样,零阻塞(同 cpuByPid)
-	if err != nil {
-		fmt.Println("Error getting cpu info:", err)
-		return 0
-	}
-	return cpuPercent
+	return cpuByPid(int32(pid)) // 瞬时差分口径（Percent(0) 是均值口径，长跑恒 0）
 }
