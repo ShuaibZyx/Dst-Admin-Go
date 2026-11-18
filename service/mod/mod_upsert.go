@@ -3,6 +3,7 @@ package mod
 import (
 	"dst-admin-go/config/database"
 	"dst-admin-go/model"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -44,6 +45,14 @@ func EnsureModInfoUniqueness(db *gorm.DB) error {
 			SELECT MAX(id) FROM mod_infos WHERE deleted_at IS NULL GROUP BY modid)`).Error; err != nil {
 		return err
 	}
-	return db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mod_infos_modid_active
-		ON mod_infos(modid) WHERE deleted_at IS NULL`).Error
+	// DDL 必须单行：glebarez 的 DDL 解析器不接受名字与 ON 之间的换行，
+	// 多行索引 SQL 会让此后每次 AutoMigrate(ModInfo) 抛 "invalid DDL"。
+	var idxSQL string
+	db.Raw(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_mod_infos_modid_active'`).Scan(&idxSQL)
+	if strings.Contains(idxSQL, "\n") {
+		if err := db.Exec(`DROP INDEX IF EXISTS idx_mod_infos_modid_active`).Error; err != nil {
+			return err
+		}
+	}
+	return db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mod_infos_modid_active ON mod_infos(modid) WHERE deleted_at IS NULL`).Error
 }

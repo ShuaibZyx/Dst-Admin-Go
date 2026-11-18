@@ -23,6 +23,13 @@ func initModRouter(router *gin.RouterGroup) {
 
 		mod.PUT("/modinfo", modApi.UpdateAllModInfos)
 
+		subApi := api.SubscriptionApi{}
+		mod.GET("/subscription", subApi.List)
+		mod.GET("/subscription/detail/:id", subApi.Detail)
+		mod.POST("/subscription/sync", subApi.Sync)
+		mod.POST("/subscription/add", subApi.Add)
+		mod.DELETE("/subscription/:id", subApi.Delete)
+
 		mod.GET("/ugc/acf", modApi.GetUgcModAcf)
 		mod.DELETE("/ugc", modApi.DeleteUgcModFile)
 	}

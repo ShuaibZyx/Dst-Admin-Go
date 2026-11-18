@@ -49,11 +49,13 @@ func initDB() {
 		panic("failed to connect database")
 	}
 	database.DB = db
-	err = database.DB.AutoMigrate(
+	// 逐模型迁移：sqlite 不支持 ALTER COLUMN，单表 schema 漂移不应阻断其余表（如 mod_subscriptions 建表）
+	models := []any{
 		&model.Spawn{},
 		&model.PlayerLog{},
 		&model.Connect{},
 		&model.ModInfo{},
+		&model.ModSubscription{},
 		&model.Cluster{},
 		&model.JobTask{},
 		&model.AutoCheck{},
@@ -62,9 +64,11 @@ func initDB() {
 		&model.BackupSnapshot{},
 		&model.LogRecord{},
 		&model.KV{},
-	)
-	if err != nil {
-		return
+	}
+	for _, m := range models {
+		if err := database.DB.AutoMigrate(m); err != nil {
+			log.Printf("错误: 数据库迁移失败 %T: %v", m, err)
+		}
 	}
 	// 清理 mod_infos 历史重复行并建立活跃行唯一索引（幂等），杜绝并发重复插入
 	if err := mod.EnsureModInfoUniqueness(database.DB); err != nil {

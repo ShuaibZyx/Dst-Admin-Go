@@ -161,3 +161,46 @@ func TestEnsureModInfoUniqueness_CleansExistingDuplicates(t *testing.T) {
 		t.Fatalf("幂等执行后活跃行应为 1，实际 %d", got)
 	}
 }
+
+// 回归：EnsureModInfoUniqueness 建的索引 DDL 必须能被 sqlite 迁移器解析。
+// 背景：多行 `CREATE UNIQUE INDEX ...\n\t\tON ...` 会让 glebarez parseDDL 抛 "invalid DDL"，
+// 进而 AutoMigrate(ModInfo) 失败、整批迁移中止（mod_subscriptions 建不出来）。
+func TestEnsureModInfoUniqueness_DDLIsParseableByMigrator(t *testing.T) {
+	db := setupUpsertDbOnly(t)
+	if err := EnsureModInfoUniqueness(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ModInfo{}); err != nil {
+		t.Fatalf("EnsureModInfoUniqueness 产生的 DDL 不可迁移: %v", err)
+	}
+}
+
+// 回归：存量多行索引 SQL 需被修复（drop + 单行重建），否则迁移持续失败
+func TestEnsureModInfoUniqueness_RepairsMultilineIndex(t *testing.T) {
+	db := setupUpsertDbOnly(t)
+	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mod_infos_modid_active
+		ON mod_infos(modid) WHERE deleted_at IS NULL`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureModInfoUniqueness(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ModInfo{}); err != nil {
+		t.Fatalf("存量多行索引未被修复: %v", err)
+	}
+}
+
+// 与 setupUpsertTest 相同但不替换全局 DB（仅需 gorm 句柄）
+func setupUpsertDbOnly(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ModInfo{}); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, _ := db.DB()
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
+}
