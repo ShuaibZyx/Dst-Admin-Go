@@ -191,17 +191,26 @@ func formatElapsed(d time.Duration) string {
 	}
 }
 
-// elapsedByPid 进程运行时长(进程启动至今);取不到返回空串
-func elapsedByPid(pid int32) string {
+// createMsByPid 进程创建时刻(Unix 毫秒);取不到返回 0
+func createMsByPid(pid int32) int64 {
 	if pid <= 0 {
-		return ""
+		return 0
 	}
 	p, err := process.NewProcess(pid)
 	if err != nil {
-		return ""
+		return 0
 	}
 	ms, err := p.CreateTime()
 	if err != nil || ms <= 0 {
+		return 0
+	}
+	return ms
+}
+
+// elapsedByPid 进程运行时长(进程启动至今);取不到返回空串
+func elapsedByPid(pid int32) string {
+	ms := createMsByPid(pid)
+	if ms <= 0 {
 		return ""
 	}
 	return formatElapsed(time.Since(time.UnixMilli(ms)))
@@ -216,6 +225,14 @@ func (receiver *LevelInstance) GetProcessElapsed() string {
 		return ""
 	}
 	return elapsedByPid(int32(pid))
+}
+
+// GetProcessCreateMs 实例进程的创建时刻(Unix 毫秒);无 pid 返回 0
+func (receiver *LevelInstance) GetProcessCreateMs() int64 {
+	receiver.lock.Lock()
+	pid := receiver.pid
+	receiver.lock.Unlock()
+	return createMsByPid(int32(pid))
 }
 
 func (receiver *ClusterContainer) Status(cluster, levelName string) bool {
@@ -247,6 +264,17 @@ func (receiver *ClusterContainer) Elapsed(cluster, levelName string) string {
 		return value.GetProcessElapsed()
 	}
 	return elapsedByPid(findLevelPid(cluster, levelName))
+}
+
+// StartedAtMs 进程启动时刻(Unix 毫秒);无进程/取不到返回 0。
+// 状态帧用它代替会走秒的 elapsed 文本——时钟属可推导数据,进变更判定会让去重失效
+func (receiver *ClusterContainer) StartedAtMs(cluster, levelName string) int64 {
+	if value := receiver.get(cluster, levelName); value != nil {
+		if ms := value.GetProcessCreateMs(); ms > 0 {
+			return ms
+		}
+	}
+	return createMsByPid(findLevelPid(cluster, levelName))
 }
 
 // Kill 强杀游戏进程（B15：游戏卡死不响应 c_shutdown 时使用）

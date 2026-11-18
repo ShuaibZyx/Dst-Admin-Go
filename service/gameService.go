@@ -475,6 +475,14 @@ func (g *GameService) StartGame(clusterName string) {
 	wg.Wait()
 }
 
+// StartedAtMs 世界进程启动时刻(Unix 毫秒);无进程/取不到返回 0
+func (g *GameService) StartedAtMs(clusterName, level string) int64 {
+	if isWindows() {
+		return clusterContainer.StartedAtMs(clusterName, level)
+	}
+	return clusterContainer.StartedAtMs(clusterName, level)
+}
+
 func (g *GameService) PsAuxSpecified(clusterName, level string) *vo.DstPsVo {
 	if isWindows() {
 		cpuUsage := clusterContainer.CpuUsage(clusterName, level)
@@ -482,7 +490,7 @@ func (g *GameService) PsAuxSpecified(clusterName, level string) *vo.DstPsVo {
 		psVo := vo.NewDstPsVo()
 		psVo.RSS = fmt.Sprintf("%f", memUsage*1024)
 		psVo.CpuUage = fmt.Sprintf("%f", cpuUsage)
-		psVo.Elapsed = clusterContainer.Elapsed(clusterName, level)
+		// Elapsed 走秒文本不再进帧(会让变更去重失效),由 started_at 供前端本地推导
 		return psVo
 	}
 	dstPsVo := vo.NewDstPsVo()

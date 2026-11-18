@@ -48,6 +48,7 @@ type LevelInfo struct {
 	IsMaster  bool             `json:"is_master"`
 	Uuid      string           `json:"uuid"`
 	Location  string           `json:"location"`
+	StartedAt int64            `json:"started_at"` // 进程启动时刻(Unix 毫秒);0=未运行。帧内不放走秒文本
 	ServerIni *level.ServerIni `json:"server_ini"`
 }
 
@@ -91,6 +92,7 @@ func queryLevelsStatus(clusterName string) []LevelInfo {
 					IsMaster:          world.IsMaster,
 					Uuid:              world.Uuid,
 					Location:          levelLocation(world.Leveldataoverride),
+				StartedAt:         gameService.StartedAtMs(clusterName, world.Uuid),
 					ServerIni:         world.ServerIni,
 				}
 			}(i)
@@ -107,6 +109,7 @@ func queryLevelsStatus(clusterName string) []LevelInfo {
 			IsMaster:          world.IsMaster,
 			Uuid:              world.Uuid,
 			Location:          levelLocation(world.Leveldataoverride),
+				StartedAt:         gameService.StartedAtMs(clusterName, world.Uuid),
 			ServerIni:         world.ServerIni,
 		}
 	}
