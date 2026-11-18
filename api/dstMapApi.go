@@ -2,10 +2,8 @@ package api
 
 import (
 	"dst-admin-go/service"
-	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
-	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/vo"
 	"fmt"
 	"io/ioutil"
@@ -13,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -85,67 +82,7 @@ func (d *DstMapApi) GetDstMapImage(ctx *gin.Context) {
 
 }
 
-func (d *DstMapApi) HasWalrusHutPlains(ctx *gin.Context) {
 
-	levelName := ctx.Query("levelName")
-	if levelName == "" {
-		ctx.JSON(http.StatusBadRequest, vo.Response{
-			Code: 400,
-			Msg:  "levelName 参数不能为空",
-		})
-		return
-	}
-
-	dstConfig := dstConfigUtils.GetDstConfig()
-	sessionPath := filepath.Join(dstUtils.GetKleiDstPath(), dstConfig.Cluster, levelName, "save", "session")
-	filePath, err := findLatestMetaFile(sessionPath)
-	if err != nil {
-		abort500f(ctx, err)
-		return
-	}
-	file, err := fileUtils.ReadFile(filePath)
-	if err != nil {
-		abort500f(ctx, err)
-		return
-	}
-	hasWalrusHutPlains := strings.Contains(file, "WalrusHut_Plains")
-	ctx.JSON(http.StatusOK, vo.Response{
-		Code: 200,
-		Msg:  "success",
-		Data: hasWalrusHutPlains,
-	})
-
-}
-
-func (d *DstMapApi) GetSessionFile(ctx *gin.Context) {
-
-	cluster := clusterUtils.GetClusterFromGin(ctx)
-	levelName := ctx.Query("levelName")
-	if levelName == "" {
-		ctx.JSON(http.StatusBadRequest, vo.Response{
-			Code: 400,
-			Msg:  "levelName 参数不能为空",
-		})
-		return
-	}
-	sessionPath := filepath.Join(dstUtils.GetKleiDstPath(), cluster.ClusterName, levelName, "save", "session")
-	filePath, err := findLatestMetaFile(sessionPath)
-	if err != nil {
-		abort500f(ctx, err)
-		return
-	}
-	file, err := fileUtils.ReadFile(filePath)
-	if err != nil {
-		abort500f(ctx, err)
-		return
-	}
-	ctx.JSON(http.StatusOK, vo.Response{
-		Code: 200,
-		Msg:  "success",
-		Data: file,
-	})
-
-}
 
 func findLatestMetaFile(directory string) (string, error) {
 	// 检查指定目录是否存在
