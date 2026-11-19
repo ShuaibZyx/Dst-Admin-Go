@@ -18,6 +18,7 @@ import (
 type SaveInfo struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
+	Size    int64  `json:"size"`    // 存档目录文件总大小（字节）
 	Current bool   `json:"current"` // 是否为当前部署的存档
 	InPlace bool   `json:"inPlace"` // 是否已在存档目录内
 	Running  bool   `json:"running"`  // 任一世界是否运行中
@@ -97,7 +98,7 @@ func ListSaves() []SaveInfo {
 	var out []SaveInfo
 	for _, p := range collectClusterDirs(base) {
 		name := filepath.Base(p)
-		out = append(out, SaveInfo{Name: name, Path: p, Current: name == current, InPlace: true, Running: isSaveRunning(name)})
+		out = append(out, SaveInfo{Name: name, Path: p, Size: fileUtils.DirSize(p), Current: name == current, InPlace: true, Running: isSaveRunning(name)})
 	}
 	return out
 }

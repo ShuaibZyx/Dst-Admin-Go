@@ -30,6 +30,21 @@ func IsFile(path string) bool {
 	return !IsDir(path)
 }
 
+// DirSize 递归统计目录内文件总字节数（符号链接与不可读项按 0 计）
+func DirSize(path string) int64 {
+	var total int64
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
+}
+
 func CreateDir(dirName string) bool {
 	if dirName == "" {
 		return false

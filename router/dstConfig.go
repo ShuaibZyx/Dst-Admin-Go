@@ -26,6 +26,7 @@ func initDstConfigRouter(router *gin.RouterGroup) {
 	fsApi := api.FsApi{}
 	router.GET("/api/fs/dirs", fsApi.ListDirs)
 	router.POST("/api/fs/mkdir", fsApi.Mkdir)
+	router.GET("/api/fs/open", fsApi.Open)
 
 	kvApi := api.KvApi{}
 	kv := router.Group("/api/kv")

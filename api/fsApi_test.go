@@ -118,3 +118,76 @@ func TestMkdirCreatesNested(t *testing.T) {
 		t.Fatalf("目录未创建: %v", err)
 	}
 }
+
+func TestOpenRejectsUnknownKind(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := gin.New()
+	fsApi := FsApi{}
+	app.GET("/api/fs/open", fsApi.Open)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/fs/open?kind=/etc", nil)
+	app.ServeHTTP(w, req)
+
+	var resp struct {
+		Code int `json:"code"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err, w.Body.String())
+	}
+	if resp.Code != 400 {
+		t.Fatalf("非白名单 kind 应拒绝: code=%d body=%s", resp.Code, w.Body.String())
+	}
+}
+
+func TestResolveOpenEntry(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "backup")
+
+	// 根内条目（相对/绝对/嵌套）均放行
+	if got, err := resolveOpenEntry(root, "a.zip"); err != nil || got != filepath.Join(root, "a.zip") {
+		t.Fatalf("相对条目: got=%q err=%v", got, err)
+	}
+	want := filepath.Join(root, "DoNotStarveTogether", "cluster1")
+	if got, err := resolveOpenEntry(root, filepath.Join("DoNotStarveTogether", "cluster1")); err != nil || got != want {
+		t.Fatalf("嵌套条目: got=%q err=%v", got, err)
+	}
+	if got, err := resolveOpenEntry(root, want); err != nil || got != want {
+		t.Fatalf("绝对路径条目: got=%q err=%v", got, err)
+	}
+
+	// 越界/根本身必须拒绝
+	for _, p := range []string{
+		"..",
+		"../x.zip",
+		filepath.Join(root, "..", "sibling.zip"),
+		filepath.Dir(root),               // 根目录的父级
+		root + "2",                       // 兄弟目录（前缀混淆）
+		root,                             // 根本身
+	} {
+		if got, err := resolveOpenEntry(root, p); err == nil {
+			t.Fatalf("应拒绝 %q, 却解析为 %q", p, got)
+		}
+	}
+}
+
+func TestOpenTarget(t *testing.T) {
+	base := t.TempDir()
+
+	// 目录条目（存档）：进入其内部
+	save := filepath.Join(base, "cluster1")
+	if err := os.MkdirAll(save, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if dir, sel := openTarget(save); dir != save || sel != "" {
+		t.Fatalf("存档应进入内部: dir=%q sel=%q", dir, sel)
+	}
+
+	// 文件条目（备份 zip）：打开所在目录并选中
+	zip := filepath.Join(base, "backup.zip")
+	if err := os.WriteFile(zip, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if dir, sel := openTarget(zip); dir != base || sel != zip {
+		t.Fatalf("备份应定位所在目录: dir=%q sel=%q", dir, sel)
+	}
+}

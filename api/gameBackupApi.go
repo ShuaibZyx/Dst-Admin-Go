@@ -35,12 +35,16 @@ func (g *GameBackUpApi) DownloadBackup(ctx *gin.Context) {
 	backupService.DownloadBackup(ctx)
 }
 
+// GetBackupList 返回备份列表 + 备份目录（前端展示用）
 func (g *GameBackUpApi) GetBackupList(ctx *gin.Context) {
 	cluster := clusterUtils.GetClusterFromGin(ctx)
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
 		Msg:  "get backup list success",
-		Data: backupService.GetBackupList(cluster.ClusterName),
+		Data: gin.H{
+			"backups": backupService.GetBackupList(cluster.ClusterName),
+			"dir":     cluster.Backup,
+		},
 	})
 }
 
