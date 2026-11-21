@@ -80,7 +80,16 @@ func TestBuildDstUpdateCmd_QuotesPaths(t *testing.T) {
 	}
 
 	cmd := buildDstUpdateCmd("linux", "ROGIA")
-	if !strings.Contains(cmd, `cd "`) || !strings.Contains(cmd, `force_install_dir "`) {
-		t.Fatalf("unix 分支的 cd 与 force_install_dir 路径都必须带引号, 实际命令: %s", cmd)
+	// 含空格路径必须整体引用:单引号(Quote)或双引号均可,但引号必须包住整条路径
+	if !strings.Contains(cmd, `cd "`) && !strings.Contains(cmd, `cd '`) {
+		t.Fatalf("unix 分支的 cd 路径必须带引号, 实际命令: %s", cmd)
+	}
+	if !strings.Contains(cmd, `force_install_dir "`) && !strings.Contains(cmd, `force_install_dir '`) {
+		t.Fatalf("unix 分支的 force_install_dir 路径必须带引号, 实际命令: %s", cmd)
+	}
+	// 关键回归:引号必须包住含空格的完整路径,而非把空格转义成 \  后塞进双引号
+	if !strings.Contains(cmd, `'`+filepath.Join(spaceRoot, "dst-dedicated-server")+`'`) &&
+		!strings.Contains(cmd, `"`+filepath.Join(spaceRoot, "dst-dedicated-server")+`"`) {
+		t.Fatalf("含空格的安装目录必须作为一个完整引号单元出现, 实际命令: %s", cmd)
 	}
 }

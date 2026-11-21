@@ -38,16 +38,21 @@ while [ ! -e "${steam_dst_server}/bin/dontstarve_dedicated_server_nullrenderer" 
   fi
   echo "Not found Dont Starve Together Sever, start to installing, try: ${retry}"
   bash $steam_cmd_path/steamcmd.sh +force_install_dir $steam_dst_server +login anonymous +app_update 343050 validate +quit
-  mkdir -p $USER_DIR/.klei/DoNotStarveTogether/MyDediServer
-  mkdir -p /app/backup
-  mkdir -p /app/mod
+  sleep 3
+  ((retry++))
+done
+
+# 初始化目录与默认口令(幂等:已存在不追加,重启/重试不再写重复键)
+# 旧版用未定义的 $USER_DIR,目录建到了 /.klei 而面板读 $HOME/.klei
+mkdir -p "$HOME/.klei/DoNotStarveTogether/MyDediServer"
+mkdir -p /app/backup
+mkdir -p /app/mod
+if [ ! -f /app/password.txt ]; then
   echo "username=admin" >> /app/password.txt
   echo "password=123456" >> /app/password.txt
   echo "displayName=admin" >> /app/password.txt
   echo "photoURL=xxx" >> /app/password.txt
-  sleep 3
-  ((retry++))
-done
+fi
 
 
 # 运行其他命令，这里只是做示例

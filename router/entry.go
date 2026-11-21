@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"dst-admin-go/middleware"
+	"dst-admin-go/utils/pathUtils"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -71,9 +72,9 @@ func NewRoute() *gin.Engine {
 }
 
 
-// A5: 首次启动生成随机 session 签名密钥并持久化
+// A5: 首次启动生成随机 session 签名密钥并持久化(数据根,惰性解析)
 func loadSessionSecret() []byte {
-	const secretFile = "session.secret"
+	secretFile := pathUtils.Data("session.secret")
 	if b, err := os.ReadFile(secretFile); err == nil && len(b) >= 32 {
 		return b
 	}

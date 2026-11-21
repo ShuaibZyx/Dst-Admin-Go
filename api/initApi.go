@@ -4,6 +4,7 @@ import (
 	"dst-admin-go/service"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"net/http"
 
@@ -13,11 +14,12 @@ import (
 type InitApi struct {
 }
 
-const first = "./first"
+// first 首启标记文件(数据根,惰性解析)
+func first() string { return pathUtils.Data("first") }
 
 func (f *InitApi) InitFirst(ctx *gin.Context) {
 
-	exist := fileUtils.Exists(first)
+	exist := fileUtils.Exists(first())
 	if exist {
 		abort500f(ctx, "非法请求")
 		return
@@ -32,7 +34,7 @@ func (f *InitApi) InitFirst(ctx *gin.Context) {
 
 	initEvnService.InitDstEnv(initData, ctx)
 
-	fileUtils.CreateFile(first)
+	fileUtils.CreateFile(first())
 	ctx.JSON(http.StatusOK, vo.Response{
 		Code: 200,
 		Msg:  "success",
@@ -42,7 +44,7 @@ func (f *InitApi) InitFirst(ctx *gin.Context) {
 
 func (f *InitApi) CheckIsFirst(ctx *gin.Context) {
 
-	exist := fileUtils.Exists(first)
+	exist := fileUtils.Exists(first())
 
 	code := 200
 	msg := "is first"

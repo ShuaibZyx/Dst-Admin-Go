@@ -161,6 +161,8 @@ func GetDstUpdateCmd(clusterName string) string {
 }
 
 // buildDstUpdateCmd 纯构建函数(goos 可注入,便于跨平台测试非本机分支)。
+// 路径引用按 shell 语义区分:Windows cmd 用双引号,unix sh 用单引号(Quote)。
+// 旧实现 EscapePath 反斜杠转义后再套双引号——sh 双引号内 \ 是字面量,含空格路径必碎。
 func buildDstUpdateCmd(goos, clusterName string) string {
 	cluster := dstConfigUtils.GetDstConfig()
 	// 走统一解析（父级模式下配置为相对名，直接用会拼错）
@@ -169,31 +171,35 @@ func buildDstUpdateCmd(goos, clusterName string) string {
 	if cluster.Beta == 1 {
 		dstInstallDir = dstInstallDir + "-beta"
 	}
-	// 确保路径是跨平台兼容的
-	dstInstallDir = filepath.Clean(EscapePath(dstInstallDir))
+	dstInstallDir = filepath.Clean(dstInstallDir)
 	steamCmdPath = filepath.Clean(steamCmdPath)
 
+	quote := shellUtils.Quote
+	if goos == "windows" {
+		quote = func(p string) string { return "\"" + p + "\"" }
+	}
+
 	// 构建基本命令
-	baseCmd := "+login anonymous +force_install_dir \"%s\" +app_update 343050"
+	baseCmd := "+login anonymous +force_install_dir " + quote(dstInstallDir) + " +app_update 343050"
 	if cluster.Beta == 1 {
 		baseCmd += " -beta updatebeta"
 	}
 	baseCmd += " validate +quit"
-	baseCmd = fmt.Sprintf(baseCmd, dstInstallDir)
 
 	// 根据操作系统生成不同的命令
 	var cmd string
 	if goos == "windows" {
-		cmd = fmt.Sprintf("cd /d \"%s\" && Start \"\" steamcmd.exe %s", steamCmdPath, baseCmd)
+		// 同步执行:旧 `Start ""` 立即返回,更新未完成就报成功、失败也无从感知
+		cmd = fmt.Sprintf("cd /d %s && steamcmd.exe %s", quote(steamCmdPath), baseCmd)
 	} else {
 		steamCmdScript := filepath.Join(steamCmdPath, "steamcmd.sh")
 		if cluster.Bin == consts.BinBox86 && goos != "darwin" {
-			cmd = fmt.Sprintf("cd \"%s\" ; box86 ./linux32/steamcmd %s", steamCmdPath, baseCmd)
+			cmd = fmt.Sprintf("cd %s ; box86 ./linux32/steamcmd %s", quote(steamCmdPath), baseCmd)
 		} else {
 			if fileUtils.Exists(steamCmdScript) {
-				cmd = fmt.Sprintf("cd \"%s\" ; ./steamcmd.sh %s", steamCmdPath, baseCmd)
+				cmd = fmt.Sprintf("cd %s ; ./steamcmd.sh %s", quote(steamCmdPath), baseCmd)
 			} else {
-				cmd = fmt.Sprintf("cd \"%s\" ; ./steamcmd %s", steamCmdPath, baseCmd)
+				cmd = fmt.Sprintf("cd %s ; ./steamcmd %s", quote(steamCmdPath), baseCmd)
 			}
 		}
 
@@ -208,7 +214,7 @@ func Status(clusterName, level string) bool {
 		}
 	}()
 
-	cmd := " ps -ef | grep -v grep | grep -v tail |grep '" + clusterName + "'|grep " + level + " |sed -n '1P'|awk '{print $2}' "
+	cmd := " ps -ef | grep -v grep | grep -v tail |grep " + shellUtils.Quote(clusterName) + "|grep " + shellUtils.Quote(level) + " |sed -n '1P'|awk '{print $2}' "
 	result, err := shellUtils.Shell(cmd)
 	if err != nil {
 		return false
@@ -448,21 +454,5 @@ func GetModSetup2(clusterName string) string {
 	return filepath.Join(cluster.ForceInstallDir, "mods", "dedicated_server_mods_setup.lua")
 }
 
-func EscapePath(path string) string {
-
-	// windows 就跳过
-	//if runtime.GOOS == "windows" {
-	//	return path
-	//}
-	if runtime.GOOS == "windows" {
-		return path
-	}
-	// 在这里添加需要转义的特殊字符
-	escapedChars := []string{" ", "'", "(", ")"}
-
-	for _, char := range escapedChars {
-		path = strings.ReplaceAll(path, char, "\\"+char)
-	}
-
-	return path
-}
+// EscapePath 已删除:反斜杠转义后再套双引号在 sh 下必碎(双引号内 \ 是字面量)。
+// 需要引用路径时统一用 shellUtils.Quote(单引号)。

@@ -183,14 +183,13 @@ func ReverseRead(filename string, lineNum uint) ([]string, error) {
 			return buff, err
 		}
 		if char[0] == '\n' {
-			// offset--  //windows跳过'\r'
 			lineNum-- //到此读取完一行
 			buff = append(buff, lineStr)
 			lineStr = ""
 			if lineNum == 0 {
 				return buff, nil
 			}
-		} else {
+		} else if char[0] != '\r' {
 			lineStr = string(char) + lineStr
 		}
 		offset--
@@ -213,8 +212,16 @@ func DeleteDir(path string) error {
 	if err != nil {
 		return err
 	}
-	if path == filepath.Join(home, ".klei/DoNotStarveTogether") {
-		return errors.New(".klei/DoNotStarveTogether not allow to delete")
+	// 存档根禁删兜底:覆盖各平台布局,只护 Unix 布局时 Windows 的
+	// Documents\klei\DoNotStarveTogether 没有兜底
+	for _, root := range []string{
+		filepath.Join(home, ".klei", "DoNotStarveTogether"),
+		filepath.Join(home, "Documents", "klei", "DoNotStarveTogether"),
+		filepath.Join(home, "Documents", "Klei", "DoNotStarveTogether"),
+	} {
+		if path == root {
+			return errors.New("klei save root not allow to delete")
+		}
 	}
 	err = os.RemoveAll(path)
 	if err != nil {

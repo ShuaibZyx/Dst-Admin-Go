@@ -147,6 +147,18 @@ func openTarget(entry string) (dir, selectPath string) {
 	return filepath.Dir(entry), entry
 }
 
+// headlessBlockMsg 无图形界面环境(xdg-open 不可用/无显示服务)时返回阻断原因,可打开返回空串。
+// 纯函数式探测:环境变量缺失或 xdg-open 不在 PATH 即判定无头,避免 cmd.Start 报 500。
+func headlessBlockMsg() string {
+	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+		return "当前为无图形界面环境(如 Docker/SSH)，无法打开文件管理器"
+	}
+	if _, err := exec.LookPath("xdg-open"); err != nil {
+		return "未安装 xdg-open，无法打开文件管理器"
+	}
+	return ""
+}
+
 // Open 在系统文件管理器中打开「文件」（存档管理/备份列表条目级按钮）。
 // 只认 kind 白名单（save=存档根、backup=集群备份目录），不接受任意路径；
 // path 可选=白名单根内的单个条目：存档（目录）进入其内部，备份（文件）打开所在目录并选中；
@@ -198,6 +210,11 @@ func (f *FsApi) Open(ctx *gin.Context) {
 			cmd = exec.Command("open", dir)
 		}
 	default:
+		// 无头环境(Docker/SSH 服务器)没有 xdg-open 或没有显示服务,直接给路径而不是 500
+		if msg := headlessBlockMsg(); msg != "" {
+			ctx.JSON(http.StatusOK, vo.Response{Code: 400, Msg: msg + "；路径: " + dir, Data: gin.H{"path": dir}})
+			return
+		}
 		cmd = exec.Command("xdg-open", dir)
 	}
 	if err := cmd.Start(); err != nil {

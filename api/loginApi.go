@@ -60,7 +60,7 @@ func (l *LoginApi) ChangePassword(ctx *gin.Context) {
 
 // readUserInfo 读 password.txt 的 4 字段（部分更新的基底）
 func readUserInfo() service.UserInfo {
-	lines, err := fileUtils.ReadLnFile(consts.PasswordPath)
+	lines, err := fileUtils.ReadLnFile(consts.PasswordPath())
 	if err != nil {
 		return service.UserInfo{}
 	}
@@ -103,7 +103,7 @@ func (l *LoginApi) UpdateUserInfo(ctx *gin.Context) {
 		PhotoURL:    body.PhotoURL,
 		Password:    body.Password,
 	})
-	err := fileUtils.WriterLnFile(consts.PasswordPath, []string{
+	err := fileUtils.WriterLnFile(consts.PasswordPath(), []string{
 		"username = " + merged.Username,
 		"password = " + merged.Password,
 		"displayName=" + merged.DisplayName,

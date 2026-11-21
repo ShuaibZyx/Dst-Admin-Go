@@ -1,6 +1,7 @@
 package consts
 
 import (
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/utils/systemUtils"
 	"fmt"
 	"runtime"
@@ -25,7 +26,8 @@ const (
 
 var HomePath string
 
-const PasswordPath = "./password.txt"
+// PasswordPath 口令文件位于数据根(惰性解析,数据根依赖运行期 CWD 判定)
+func PasswordPath() string { return pathUtils.Data("password.txt") }
 
 func init() {
 	home, err := systemUtils.Home()

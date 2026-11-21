@@ -2,6 +2,7 @@ package dstConfigUtils
 
 import (
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/utils/systemUtils"
 	"log"
 	"os"
@@ -22,7 +23,17 @@ const (
 	DefaultWorlds    = "worlds"
 )
 
-var dst_config_path = "./dst_config"
+// dst_config_path 覆盖用路径(SetDstConfigPathForTest/启动注入);空 = 按数据根惰性解析。
+// 必须惰性:测试 chdir 后数据根才能落到新 CWD,init 时固化会读错目录。
+var dst_config_path = ""
+
+// cfgPath dst_config 实际位置:显式覆盖优先,否则数据根(见 pathUtils.DataRoot)
+func cfgPath() string {
+	if dst_config_path != "" {
+		return dst_config_path
+	}
+	return pathUtils.Data("dst_config")
+}
 
 // SetDstConfigPathForTest 测试用：替换 dst_config 路径，返回恢复函数
 func SetDstConfigPathForTest(p string) func() {
@@ -119,6 +130,14 @@ func KleiDstPath() string {
 		klei = filepath.Join(home, "Documents", "klei", "DoNotStarveTogether")
 	} else {
 		klei = filepath.Join(home, ".klei", "DoNotStarveTogether")
+		// macOS:游戏客户端/服务端惯例写 ~/Documents/Klei(同 Windows 布局),
+		// 已有该目录而无 ~/.klei 时跟随,避免找错存档根;否则维持 ~/.klei 不变
+		if runtime.GOOS == "darwin" {
+			docs := filepath.Join(home, "Documents", "Klei", "DoNotStarveTogether")
+			if fileUtils.Exists(docs) && !fileUtils.Exists(klei) {
+				klei = docs
+			}
+		}
 	}
 	if IsBeta() {
 		klei = klei + "BetaBranch"
@@ -143,11 +162,12 @@ func NewDstConfig() *DstConfig {
 }
 
 func GetDstConfig() DstConfig {
-	if fi, err := os.Stat(dst_config_path); err == nil {
+	p := cfgPath()
+	if fi, err := os.Stat(p); err == nil {
 		cfgCacheMu.RLock()
 		cached, cpath, ctime := cfgCache, cfgCachePath, cfgCacheTime
 		cfgCacheMu.RUnlock()
-		if cpath == dst_config_path && !ctime.IsZero() && fi.ModTime().Equal(ctime) {
+		if cpath == p && !ctime.IsZero() && fi.ModTime().Equal(ctime) {
 			return cached
 		}
 	}
@@ -155,13 +175,13 @@ func GetDstConfig() DstConfig {
 	dstConfig := NewDstConfig()
 
 	//判断是否存在，不存在创建一个
-	if !fileUtils.Exists(dst_config_path) {
-		if err := fileUtils.CreateFile(dst_config_path); err != nil {
+	if !fileUtils.Exists(p) {
+		if err := fileUtils.CreateFile(p); err != nil {
 			log.Panicln("create docker_dst_config error", err)
 		}
 
 	}
-	data, err := fileUtils.ReadLnFile(dst_config_path)
+	data, err := fileUtils.ReadLnFile(p)
 	if err != nil {
 		log.Panicln("read docker_dst_config error", err)
 	}
@@ -214,9 +234,9 @@ func GetDstConfig() DstConfig {
 		dstConfig.Bin = 32
 	}
 	// 写缓存（mtime 失效）
-	if fi, err := os.Stat(dst_config_path); err == nil {
+	if fi, err := os.Stat(p); err == nil {
 		cfgCacheMu.Lock()
-		cfgCache, cfgCachePath, cfgCacheTime = *dstConfig, dst_config_path, fi.ModTime()
+		cfgCache, cfgCachePath, cfgCacheTime = *dstConfig, p, fi.ModTime()
 		cfgCacheMu.Unlock()
 	}
 	return *dstConfig
@@ -254,7 +274,7 @@ func SaveDstConfig(dstConfig *DstConfig) {
 		dstConfig.Last_parent_path = oldDstConfig.Last_parent_path
 	}
 
-	err := fileUtils.WriterLnFile(dst_config_path, []string{
+	err := fileUtils.WriterLnFile(cfgPath(), []string{
 		"parent_path=" + dstConfig.Parent_path,
 		"last_parent_path=" + dstConfig.Last_parent_path,
 		"steamcmd=" + dstConfig.Steamcmd,

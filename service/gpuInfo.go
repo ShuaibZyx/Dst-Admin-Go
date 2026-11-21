@@ -13,11 +13,16 @@ type GpuInfo struct {
 }
 
 // GetGpuInfo 采集显存使用。取不到返回零值（前端显示 --）。
+// 数据源优先级:nvidia-smi(精确) > wmic(仅总量,旧版 Windows) >
+// PowerShell CIM(仅总量,Win11 24H2+ 起 wmic 被移除,Get-CimInstance 恒在)。
 func GetGpuInfo() GpuInfo {
 	if info, ok := gpuFromNvidiaSmi(); ok {
 		return info
 	}
-	return gpuFromWmic()
+	if info := gpuFromWmic(); info.TotalMB > 0 {
+		return info
+	}
+	return gpuFromPowerShell()
 }
 
 // gpuFromNvidiaSmi nvidia-smi --query-gpu=memory.used,memory.total（MB）
@@ -45,16 +50,36 @@ func gpuFromWmic() GpuInfo {
 	if err != nil {
 		return GpuInfo{}
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for _, line := range lines {
-		v := strings.TrimSpace(line)
-		if v == "" || strings.EqualFold(v, "AdapterRAM") {
-			continue
-		}
-		bytes, err := strconv.ParseFloat(v, 64)
-		if err == nil && bytes > 0 {
-			return GpuInfo{TotalMB: bytes / 1024 / 1024}
-		}
+	if bytes, ok := parseFirstPositive(string(out)); ok {
+		return GpuInfo{TotalMB: bytes / 1024 / 1024}
 	}
 	return GpuInfo{}
+}
+
+// gpuFromPowerShell wmic 的替代:Win11 24H2+ 移除了 wmic,但 Get-CimInstance 随 PowerShell 恒在。
+// 同样只拿 AdapterRAM 总量（WMI 该字段本身有 32 位上限，与 wmic 时代一致，不算回归）。
+func gpuFromPowerShell() GpuInfo {
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		"Get-CimInstance Win32_VideoController | ForEach-Object { $_.AdapterRAM }").Output()
+	if err != nil {
+		return GpuInfo{}
+	}
+	if bytes, ok := parseFirstPositive(string(out)); ok {
+		return GpuInfo{TotalMB: bytes / 1024 / 1024}
+	}
+	return GpuInfo{}
+}
+
+// parseFirstPositive 按行取首个正数;容错跳过表头/空行/非数值行(wmic 有 AdapterRAM 表头)
+func parseFirstPositive(out string) (float64, bool) {
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		v := strings.TrimSpace(line)
+		if v == "" {
+			continue
+		}
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 {
+			return n, true
+		}
+	}
+	return 0, false
 }

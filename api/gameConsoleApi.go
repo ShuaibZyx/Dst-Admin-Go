@@ -7,11 +7,11 @@ import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/levelConfigUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -221,10 +221,10 @@ func (g *GameConsoleApi) CleanAllLevel(ctx *gin.Context) {
 	basePath := dstUtils.GetClusterBasePath(clusterName)
 	for i := range levelConfig.LevelList {
 		level := levelConfig.LevelList[i]
-		fileUtils.DeleteDir(path.Join(basePath, level.File, "backup"))
-		fileUtils.DeleteDir(path.Join(basePath, level.File, "save"))
-		fileUtils.DeleteDir(path.Join(basePath, level.File, "server_chat_log.txt"))
-		fileUtils.DeleteDir(path.Join(basePath, level.File, "server_log.txt"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level.File, "backup"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level.File, "save"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level.File, "server_chat_log.txt"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level.File, "server_log.txt"))
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -253,10 +253,10 @@ func (g *GameConsoleApi) CleanLevel(ctx *gin.Context) {
 		if !fileUtils.ValidName(level) {
 			continue // A9: 非法 level 名跳过，防止穿越删除
 		}
-		fileUtils.DeleteDir(path.Join(basePath, level, "backup"))
-		fileUtils.DeleteDir(path.Join(basePath, level, "save"))
-		fileUtils.DeleteDir(path.Join(basePath, level, "server_chat_log.txt"))
-		fileUtils.DeleteDir(path.Join(basePath, level, "server_log.txt"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level, "backup"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level, "save"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level, "server_chat_log.txt"))
+		fileUtils.DeleteDir(filepath.Join(basePath, level, "server_log.txt"))
 	}
 
 	ctx.JSON(http.StatusOK, vo.Response{
@@ -440,7 +440,7 @@ func (g *GameConsoleApi) ReadLevelServeChatLog(ctx *gin.Context) {
 func (g *GameConsoleApi) ReadServerLog(ctx *gin.Context) {
 
 	lines, _ := strconv.Atoi(ctx.DefaultQuery("lines", "100"))
-	logs, err := fileUtils.ReverseRead("./log.log", uint(lines))
+	logs, err := fileUtils.ReverseRead(pathUtils.Data("log.log"), uint(lines))
 	if err != nil {
 		abort500f(ctx, "读取面板日志失败")
 		return
@@ -487,7 +487,7 @@ func (g *GameConsoleApi) DownloadDstLogFile(ctx *gin.Context) {
 
 func (g *GameConsoleApi) DownloadServerLogFile(ctx *gin.Context) {
 
-	filePath := "./log.log"
+	filePath := pathUtils.Data("log.log")
 	//打开文件
 	_, err := os.Open(filePath)
 	//非空处理

@@ -7,7 +7,7 @@ import (
 	"dst-admin-go/utils/shellUtils"
 	"fmt"
 	"log"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -121,11 +121,12 @@ func (c *GameConsoleService) CleanWorld(clusterName string) {
 
 	basePath := dstUtils.GetClusterBasePath(clusterName)
 
-	fileUtils.DeleteDir(path.Join(basePath, "Master", "backup"))
-	fileUtils.DeleteDir(path.Join(basePath, "Master", "save"))
+	// filepath 而非 path:path 恒用 / 拼接,Windows 下与系统路径混用会出边界情况
+	fileUtils.DeleteDir(filepath.Join(basePath, "Master", "backup"))
+	fileUtils.DeleteDir(filepath.Join(basePath, "Master", "save"))
 
-	fileUtils.DeleteDir(path.Join(basePath, "Caves", "backup"))
-	fileUtils.DeleteDir(path.Join(basePath, "Caves", "save"))
+	fileUtils.DeleteDir(filepath.Join(basePath, "Caves", "backup"))
+	fileUtils.DeleteDir(filepath.Join(basePath, "Caves", "save"))
 }
 
 func (c *GameConsoleService) Regenerateworld(clusterName string) {

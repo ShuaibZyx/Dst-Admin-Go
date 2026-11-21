@@ -12,6 +12,7 @@ import (
 	"dst-admin-go/service/mod"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
+	"dst-admin-go/utils/pathUtils"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -24,9 +25,10 @@ import (
 	"time"
 )
 
-const logPath = "./dst-admin-go.log"
-
 var f *os.File
+
+// logPath 数据根下的面板日志(惰性解析:数据根依赖运行期 CWD 判定)
+func logPath() string { return pathUtils.Data("dst-admin-go.log") }
 
 func Init() {
 
@@ -42,7 +44,12 @@ func Init() {
 }
 
 func initDB() {
-	db, err := gorm.Open(sqlite.Open(global.Config.Db), &gorm.Config{
+	// config.yml 的 database: dst-db 是相对名 → 落数据根;绝对路径原样用
+	dbPath := global.Config.Db
+	if dbPath != "" && !filepath.IsAbs(dbPath) {
+		dbPath = pathUtils.Data(dbPath)
+	}
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
@@ -81,9 +88,9 @@ func initDB() {
 }
 
 func initConfig() {
-	yamlFile, err := ioutil.ReadFile("./config.yml")
+	yamlFile, err := ioutil.ReadFile(pathUtils.ConfigPath())
 	if err != nil {
-		log.Println("警告: 读取 ./config.yml 失败，使用默认配置: ", err)
+		log.Println("警告: 读取 config.yml 失败，使用默认配置: ", err)
 		yamlFile = nil
 	}
 	// C4: Parse 保证非 nil，缺 config.yml / 解析失败均安全回退默认，不再 nil 解引用崩溃
@@ -97,7 +104,7 @@ func initConfig() {
 
 func initLog() {
 	var err error
-	f, err = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
+	f, err = os.OpenFile(logPath(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return
 	}

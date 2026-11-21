@@ -6,6 +6,7 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"dst-admin-go/vo/level"
 	"log"
@@ -14,11 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const (
-	cluster_template = "./static/template/cluster2.ini"
-	master_template  = "./static/Master"
-	caves_template   = "./static/Caves"
-)
+// 预设世界模板位于资源根(惰性解析,见 pathUtils.ResRoot)
+func cluster_template() string { return pathUtils.Res("static", "template", "cluster2.ini") }
+func master_template() string { return pathUtils.Res("static", "Master") }
+func caves_template() string { return pathUtils.Res("static", "Caves") }
 
 type InitService struct {
 	GameConfigService
@@ -107,7 +107,7 @@ func (i *InitService) InitClusterIni(basePath string, username string) {
 	}
 	clusterIni.ClusterName = clusterName
 	clusterIni.MaxPlayers = 8
-	fileUtils.WriterTXT(cluster_ini_path, dstUtils.ParseTemplate(cluster_template, clusterIni))
+	fileUtils.WriterTXT(cluster_ini_path, dstUtils.ParseTemplate(cluster_template(), clusterIni))
 }
 
 func (i *InitService) InitClusterToken(basePath string, token string) {
@@ -118,15 +118,15 @@ func (i *InitService) InitClusterToken(basePath string, token string) {
 
 func (i *InitService) InitBaseMaster(basePath string) {
 
-	leveldataoverride, err := fileUtils.ReadFile(filepath.Join(master_template, "leveldataoverride.lua"))
+	leveldataoverride, err := fileUtils.ReadFile(filepath.Join(master_template(), "leveldataoverride.lua"))
 	if err != nil {
 		panic("read ./static/Master/leveldataoverride.lua file error: " + err.Error())
 	}
-	modoverrides, err := fileUtils.ReadFile(filepath.Join(master_template, "modoverrides.lua"))
+	modoverrides, err := fileUtils.ReadFile(filepath.Join(master_template(), "modoverrides.lua"))
 	if err != nil {
 		panic("read ./static/Master/modoverrides.lua file error: " + err.Error())
 	}
-	server_ini, err := fileUtils.ReadFile(filepath.Join(master_template, "server.ini"))
+	server_ini, err := fileUtils.ReadFile(filepath.Join(master_template(), "server.ini"))
 	if err != nil {
 		panic("read /static/Master/server.ini file error: " + err.Error())
 	}
@@ -148,15 +148,15 @@ func (i *InitService) InitBaseMaster(basePath string) {
 
 func (i *InitService) InitBaseCaves(basePath string) {
 
-	leveldataoverride, err := fileUtils.ReadFile(filepath.Join(caves_template, "leveldataoverride.lua"))
+	leveldataoverride, err := fileUtils.ReadFile(filepath.Join(caves_template(), "leveldataoverride.lua"))
 	if err != nil {
 		panic("read ./static/Caves/leveldataoverride.lua file error: " + err.Error())
 	}
-	modoverrides, err := fileUtils.ReadFile(filepath.Join(caves_template, "modoverrides.lua"))
+	modoverrides, err := fileUtils.ReadFile(filepath.Join(caves_template(), "modoverrides.lua"))
 	if err != nil {
 		panic("read ./static/Caves/modoverrides.lua file error: " + err.Error())
 	}
-	server_ini, err := fileUtils.ReadFile(filepath.Join(caves_template, "server.ini"))
+	server_ini, err := fileUtils.ReadFile(filepath.Join(caves_template(), "server.ini"))
 	if err != nil {
 		panic("read /static/Caves/server.ini file error: " + err.Error())
 	}

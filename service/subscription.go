@@ -214,31 +214,38 @@ func GetLocalModInfo(modid string) LocalModInfo {
 }
 
 // GetSubscriptionDetail 详情：工坊实时信息 + 本地文件信息（下载后能拿到的全量）
-func GetSubscriptionDetail(modid string) map[string]interface{} {
+func GetSubscriptionDetail(modid string) (map[string]interface{}, error) {
 	out := map[string]interface{}{"local": GetLocalModInfo(modid)}
 	var rec model.ModInfo
 	if err := database.DB.Where("modid = ?", modid).First(&rec).Error; err == nil {
 		out["hasUpdate"] = rec.Update
 		out["syncedAt"] = rec.CreatedAt.Unix()
 	}
-	if details, err := mod.GetPublishedFileDetails([]string{modid}); err == nil && len(details) > 0 {
-		d := details[0]
-		out["workshop"] = map[string]interface{}{
-			"title":                 d.Title,
-			"description":           d.Description,
-			"previewUrl":            d.PreviewURL,
-			"timeCreated":           d.TimeCreated,
-			"timeUpdated":           d.TimeUpdated,
-			"subscriptions":         d.Subscriptions,
-			"favorited":             d.Favorited,
-			"views":                 d.Views,
-			"lifetimeSubscriptions": d.LifetimeSubscriptions,
-			"lifetimeFavorited":     d.LifetimeFavorited,
-			"tags":                  d.Tags,
-			"fileUrl":               d.FileURL,
-		}
+	// 工坊信息取不到必须上抛：此前这里静默吞掉错误，上层照样返回 200 + 没有 workshop 字段，
+	// 前端只能显示一个空详情，看不到任何失败原因
+	details, err := mod.GetPublishedFileDetails([]string{modid})
+	if err != nil {
+		return out, err
 	}
-	return out
+	if len(details) == 0 {
+		return out, errors.New("未找到该创意工坊条目")
+	}
+	d := details[0]
+	out["workshop"] = map[string]interface{}{
+		"title":                 d.Title,
+		"description":           d.Description,
+		"previewUrl":            d.PreviewURL,
+		"timeCreated":           d.TimeCreated,
+		"timeUpdated":           d.TimeUpdated,
+		"subscriptions":         d.Subscriptions,
+		"favorited":             d.Favorited,
+		"views":                 d.Views,
+		"lifetimeSubscriptions": d.LifetimeSubscriptions,
+		"lifetimeFavorited":     d.LifetimeFavorited,
+		"tags":                  d.Tags,
+		"fileUrl":               d.FileURL,
+	}
+	return out, nil
 }
 
 // AddSubscription 将单个创意工坊模组加入订阅库（模组订阅 tab 的订阅入口，不下载）

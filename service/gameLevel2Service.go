@@ -214,6 +214,6 @@ func initLevel(levelFolderPath string, level *level.World) {
 
 	fileUtils.WriterTXT(lPath, level.Leveldataoverride)
 	fileUtils.WriterTXT(mPath, level.Modoverrides)
-	serverBuf := dstUtils.ParseTemplate(ServerIniTemplate, level.ServerIni)
+	serverBuf := dstUtils.ParseTemplate(ServerIniTemplate(), level.ServerIni)
 	fileUtils.WriterTXT(sPath, serverBuf)
 }

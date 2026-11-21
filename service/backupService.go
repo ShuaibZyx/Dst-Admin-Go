@@ -8,14 +8,16 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
-	"dst-admin-go/utils/shellUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/utils/zip"
 	"dst-admin-go/vo"
+	"crypto/md5"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -271,21 +273,41 @@ func (b *BackupService) ScheduleBackupSnapshots() {
 	}
 }
 
+// sumMd5 计算目录内容指纹（相对路径+内容哈希后整体求哈希）。
+// 纯 Go 实现:旧版走 `find | md5sum` 管道,依赖 sh/md5sum——Windows 无 sh、macOS 是 md5 不是 md5sum,
+// 两平台上恒返回 ""，快照备份被"两次md5相等"误判跳过、一次都建不出来。
 func sumMd5(filePath string) string {
-	// find save -type f -exec md5sum {} \; | awk '{print $1}' | sort | md5sum
-	comamd := "find " + filePath + " -type f -exec md5sum {} \\; | awk '{print $1}' | sort | md5sum"
-	info, err := shellUtils.ExecuteCommand(comamd)
+	var entries []string
+	err := filepath.Walk(filePath, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, rerr := filepath.Rel(filePath, p)
+		if rerr != nil {
+			rel = p
+		}
+		data, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		entries = append(entries, filepath.ToSlash(rel)+" "+fmt.Sprintf("%x", md5.Sum(data)))
+		return nil
+	})
 	if err != nil {
 		return ""
 	}
-	return info
+	sort.Strings(entries)
+	return fmt.Sprintf("%x", md5.Sum([]byte(strings.Join(entries, "\n"))))
 }
 
 func (b *BackupService) CreateSnapshotBackup(prefix, clusterName string) {
 
 	cluster := clusterUtils.GetCluster(clusterName)
 
-	snapshotMd5FilePath := "./snapshotMd5"
+	snapshotMd5FilePath := pathUtils.Data("snapshotMd5")
 	fileUtils.CreateFileIfNotExists(snapshotMd5FilePath)
 	oldMd5, _ := fileUtils.ReadFile(snapshotMd5FilePath)
 	saveDirPath := filepath.Join(dstUtils.GetClusterBasePath(clusterName), "Master", "save")

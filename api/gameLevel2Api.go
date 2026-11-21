@@ -114,7 +114,9 @@ func queryLevelsStatus(clusterName string) []LevelInfo {
 		}
 	}
 
-	cmd := "ps -aux | grep -v grep | grep -v tail | grep -v SCREEN | grep " + clusterName + " |awk '{print $3, $4, $5, $6,$16}'"
+	// awk 按 -shard 关键字取值而非固定列 $16:box86/box64 模拟启动时命令行前多了模拟器词,
+	// 固定列会取到 -shard 字面量,状态恒"停止"(B6 同源问题)
+	cmd := "ps -aux | grep -v grep | grep -v tail | grep -v SCREEN | grep " + shellUtils.Quote(clusterName) + " |awk '{s=\"\"; for(i=1;i<=NF;i++) if($i==\"-shard\" && i<NF) {s=$(i+1); break} print $3, $4, $5, $6, s}'"
 	info, err := shellUtils.Shell(cmd)
 	if err != nil {
 		log.Println(cmd + " error: " + err.Error())
@@ -234,6 +236,11 @@ func startBefore(ctx *gin.Context) {
 }
 
 func copyOsFile() {
+	// steamclient.so 补丁仅 Linux 需要(steamcmd linux32 布局),Windows/macOS 无此文件,
+	// 无门槛会在每次开服刷"复制文件失败"
+	if runtime.GOOS != "linux" {
+		return
+	}
 	config := dstConfigUtils.GetDstConfig()
 	// 定义路径
 	srcFile := filepath.Join(dstConfigUtils.ResolvePath(config.Parent_path, config.Steamcmd, dstConfigUtils.DefaultSteamcmd), "linux32", "steamclient.so")

@@ -172,7 +172,7 @@ func (g *GameService) GetLevelStatus(clusterName, level string) bool {
 		return WindowService.GetLevelStatus(clusterName, level)
 	}
 
-	cmd := " ps -ef | grep -v grep | grep -v tail |grep '" + clusterName + "'|grep " + level + " |sed -n '1P'|awk '{print $2}' "
+	cmd := " ps -ef | grep -v grep | grep -v tail |grep " + shellUtils.Quote(clusterName) + "|grep " + shellUtils.Quote(level) + " |sed -n '1P'|awk '{print $2}' "
 	result, err := shellUtils.Shell(cmd)
 	if err != nil {
 		return false
@@ -187,7 +187,7 @@ func (g *GameService) shutdownLevel(clusterName, level string) {
 		return
 	}
 
-	shell := "screen -S \"" + screenKey.Key(clusterName, level) + "\" -p 0 -X stuff \"c_shutdown(true)\\n\""
+	shell := screenStuffCmd(clusterName, level, "c_shutdown(true)")
 	log.Println("正在shutdown世界", "cluster: ", clusterName, "level: ", level, "command: ", shell)
 	_, err := shellUtils.Shell(shell)
 	if err != nil {
@@ -204,7 +204,7 @@ func (g *GameService) killLevel(clusterName, level string) {
 	if !g.GetLevelStatus(clusterName, level) {
 		return
 	}
-	cmd := " ps -ef | grep -v grep | grep -v tail | grep -v SCREEN |grep '" + clusterName + "'|grep " + level + " |sed -n '1P'|awk '{print $2}' |xargs kill -9" // B6
+	cmd := " ps -ef | grep -v grep | grep -v tail | grep -v SCREEN |grep " + shellUtils.Quote(clusterName) + "|grep " + shellUtils.Quote(level) + " |sed -n '1P'|awk '{print $2}' |xargs kill -9" // B6
 	log.Println("正在kill世界", "cluster: ", clusterName, "level: ", level, "command: ", cmd)
 	_, err := shellUtils.Shell(cmd)
 	if err != nil {
@@ -281,34 +281,37 @@ func (g *GameService) LaunchLevel(clusterName, level string, bin, beta int) {
 	conf_dir := cluster.Conf_dir
 	var startCmd = ""
 
-	dstInstallDir = dstUtils.EscapePath(dstInstallDir)
+	// 路径/参数一律 shellUtils.Quote 单引号引用:旧实现 EscapePath 转义后再套双引号,
+	// sh 双引号内 \ 是字面量,含空格/括号路径必碎(Windows 不受影响,形成跨平台分叉)
 	log.Println(dstInstallDir)
+	q := shellUtils.Quote
+	key := shellUtils.EscapeShellDQ(screenKey.Key(clusterName, level))
 
 	if runtime.GOOS == "darwin" {
 		// macOS:Klei 只提供 bin/dontstarve_dedicated_server_nullrenderer(64 位 Mach-O,
 		// Apple Silicon 走 Rosetta),无 bin64/box86/box64 目录与变体,统一走 bin 分支
-		startCmd = "cd \"" + dstInstallDir + "/bin\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin") + " ; screen -d -m -S \"" + key + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + q(clusterName) + " -shard " + q(level)
 	} else if bin == consts.BinX64 {
-		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin64") + " ; screen -d -m -S \"" + key + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + q(clusterName) + " -shard " + q(level)
 	} else if bin == consts.BinLuaJIT {
 		// 只用模组方案（dontstarveluajit2）：不替换游戏二进制，与 64 位同 exe
-		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin64") + " ; screen -d -m -S \"" + key + "\"  ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + q(clusterName) + " -shard " + q(level)
 	} else if bin == consts.BinBox86 {
-		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box86 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin64") + " ; screen -d -m -S \"" + key + "\" box86 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + q(clusterName) + " -shard " + q(level)
 	} else if bin == consts.BinBox64 {
-		startCmd = "cd \"" + dstInstallDir + "/bin64\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\" box64 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin64") + " ; screen -d -m -S \"" + key + "\" box64 ./dontstarve_dedicated_server_nullrenderer_x64 -console -cluster " + q(clusterName) + " -shard " + q(level)
 	} else {
-		startCmd = "cd \"" + dstInstallDir + "/bin\" ; screen -d -m -S \"" + screenKey.Key(clusterName, level) + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + clusterName + " -shard " + level
+		startCmd = "cd " + q(dstInstallDir+"/bin") + " ; screen -d -m -S \"" + key + "\"  ./dontstarve_dedicated_server_nullrenderer -console -cluster " + q(clusterName) + " -shard " + q(level)
 	}
 
 	if ugcDirectory != "" {
-		startCmd += " -ugc_directory " + ugcDirectory
+		startCmd += " -ugc_directory " + q(ugcDirectory)
 	}
 	if persistent_storage_root != "" {
-		startCmd += " -persistent_storage_root " + persistent_storage_root
+		startCmd += " -persistent_storage_root " + q(persistent_storage_root)
 	}
 	if conf_dir != "" {
-		startCmd += " -conf_dir " + conf_dir
+		startCmd += " -conf_dir " + q(conf_dir)
 	}
 
 	startCmd += "  ;"
@@ -494,7 +497,7 @@ func (g *GameService) PsAuxSpecified(clusterName, level string) *vo.DstPsVo {
 		return psVo
 	}
 	dstPsVo := vo.NewDstPsVo()
-	cmd := "ps -aux | grep -v grep | grep -v tail | grep " + clusterName + "  | grep " + level + " | sed -n '2P' |awk '{print $3, $4, $5, $6}'"
+	cmd := "ps -aux | grep -v grep | grep -v tail | grep " + shellUtils.Quote(clusterName) + "  | grep " + shellUtils.Quote(level) + " | sed -n '2P' |awk '{print $3, $4, $5, $6}'"
 
 	info, err := shellUtils.Shell(cmd)
 	if err != nil {

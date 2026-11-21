@@ -31,9 +31,8 @@ func ExecuteCommand(command string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("run command error: %v, ERROR: %s", err, stderr.String())
 	}
-	if stderr.String() != "" {
-		return "", fmt.Errorf("exec command error: %s", stderr.String())
-	}
+	// stderr 有输出但退出码 0 不算失败:find 权限警告、工具提示都写 stderr,
+	// 旧逻辑一律判错会让成功命令被当成失败(如快照 md5 被误判失效)
 	return out.String(), nil
 }
 

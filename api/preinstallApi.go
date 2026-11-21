@@ -6,6 +6,7 @@ import (
 	"dst-admin-go/utils/clusterUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -24,13 +25,13 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 	log.Println(name)
 
 	// 先做无副作用校验（模板存在性/IA 闸门），通过后再停服备份——避免误操作先把世界杀了
-	if !fileUtils.Exists("./static/preinstall/" + name) {
-		abort500f(ctx, "./static/preinstall/"+name, "不存在，请先添加")
+	if !fileUtils.Exists(pathUtils.Res("static", "preinstall", name)) {
+		abort500f(ctx, pathUtils.Res("static", "preinstall", name), "不存在，请先添加")
 		return
 	}
 
 	// 闸门:预设含海难/火山世界时要求已订阅 IA 模组
-	if err := mod.CheckIADirGate(cluster.ClusterName, "./static/preinstall/"+name); err != nil {
+	if err := mod.CheckIADirGate(cluster.ClusterName, pathUtils.Res("static", "preinstall", name)); err != nil {
 		ctx.JSON(http.StatusBadRequest, vo.Response{Code: 400, Msg: err.Error()})
 		return
 	}
@@ -57,7 +58,7 @@ func (p *PreinstallApi) UsePreinstall(ctx *gin.Context) {
 		return
 	}
 
-	err = fileUtils.Copy("./static/preinstall/"+name, filepath.Join(dstUtils.GetKleiDstPath()))
+	err = fileUtils.Copy(pathUtils.Res("static", "preinstall", name), filepath.Join(dstUtils.GetKleiDstPath()))
 	if err != nil {
 		abort500f(ctx, err)
 		return

@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"dst-admin-go/utils/pathUtils"
 	"fmt"
 	"io"
 	"log"
@@ -84,7 +85,8 @@ func (receiver *ClusterContainer) Send(cluster, levelName, message string) {
 	}
 }
 
-// matchLevelCmdline 判断进程命令行是否为 (cluster, level) 的游戏世界
+// matchLevelCmdline 判断进程命令行是否为 (cluster, level) 的游戏世界。
+// exe 可能是首个参数(直接启动),也可能是 box86/box64 等模拟器后的第二个参数。
 func matchLevelCmdline(cmdline []string, cluster, level string) bool {
 	if len(cmdline) == 0 {
 		return false
@@ -92,16 +94,27 @@ func matchLevelCmdline(cmdline []string, cluster, level string) bool {
 	// gopsutil Windows 的 CmdlineSlice 返回单元素整条命令行(wmic 形态),
 	// exe 判定取"第一个空格前"(并去引号)再 Base——直接 Base 会取到命令行末尾的
 	// 参数值(如 -ugc_directory 的目录名),匹配恒失败,面板重启后世界状态恒"停止"。
-	first := strings.Trim(cmdline[0], `"`)
-	if i := strings.IndexAny(first, " \t"); i > 0 {
-		first = first[:i]
-	}
-	base := strings.ToLower(filepath.Base(strings.Trim(first, `"`)))
-	if !strings.Contains(base, "dontstarve_dedicated_server") {
+	if !cmdlineHasGameExe(cmdline) {
 		return false
 	}
 	joined := strings.Join(cmdline, " ")
 	return strings.Contains(joined, "-cluster "+cluster) && strings.Contains(joined, "-shard "+level)
+}
+
+// cmdlineHasGameExe 命令行中是否含游戏可执行体:检查首个参数,
+// 以及 box86/box64 等模拟器启动时的第二个参数(真身在模拟器之后)。
+func cmdlineHasGameExe(cmdline []string) bool {
+	for i := 0; i < len(cmdline) && i < 2; i++ {
+		tok := strings.Trim(cmdline[i], `"`)
+		if j := strings.IndexAny(tok, " \t"); j > 0 {
+			tok = tok[:j] // 单元素整条命令行形态:取第一个空白前的 exe 段
+		}
+		base := strings.ToLower(filepath.Base(strings.Trim(tok, `"`)))
+		if strings.Contains(base, "dontstarve_dedicated_server") {
+			return true
+		}
+	}
+	return false
 }
 
 // pidCache 短 TTL 缓存：状态轮询每次全量扫进程过重（曾拖垮 /status 至超时）
@@ -370,7 +383,7 @@ func (receiver *LevelInstance) Start() {
 		return // A2: 加锁后双检，避免并发 Start 启动两个游戏进程
 	}
 
-	tLogsTxt := receiver.cluster + "_" + receiver.levelName + "_log"
+	tLogsTxt := pathUtils.Data(receiver.cluster + "_" + receiver.levelName + "_log") // 游戏控制台日志落数据根
 	logFile, err := os.Create(tLogsTxt)
 	if err != nil {
 		receiver.lock.Unlock() // A2: 创建失败必须解锁，否则永久死锁

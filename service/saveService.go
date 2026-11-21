@@ -45,6 +45,10 @@ func defaultSaveScanRoots() []string {
 		roots = append(roots, filepath.Join(home, "Documents", "klei"))
 	} else {
 		roots = append(roots, filepath.Join(home, ".klei"))
+		if runtime.GOOS == "darwin" {
+			// macOS 游戏侧可能写 ~/Documents/Klei,扫描一并覆盖
+			roots = append(roots, filepath.Join(home, "Documents", "Klei"))
+		}
 	}
 	if cfg := dstConfigUtils.GetDstConfig(); cfg.Last_parent_path != "" {
 		roots = append(roots, filepath.Join(cfg.Last_parent_path, "world"))

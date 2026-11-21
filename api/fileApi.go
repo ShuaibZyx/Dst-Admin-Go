@@ -4,6 +4,7 @@ import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -54,8 +55,11 @@ func (d *FileApi) UploadUgcMods(ctx *gin.Context) {
 }
 
 func (d *FileApi) GetBackground(ctx *gin.Context) {
-	// 文件路径
-	filePath := "./dist/assets/background.png"
+	// 用户上传的背景在数据根;没传过则回退资源根随包的默认图
+	filePath := pathUtils.Data("background.png")
+	if !fileUtils.Exists(filePath) {
+		filePath = pathUtils.Res("dist", "assets", "background.png")
+	}
 	// 返回文件
 	ctx.File(filePath)
 }
@@ -67,10 +71,8 @@ func (d *FileApi) UploadBackground(ctx *gin.Context) {
 		return
 	}
 	files := form.File["file"]
-	dir := "./dist/assets"
-	fileUtils.CreateDirIfNotExists(dir)
 	for _, file := range files {
-		p := filepath.Join("./dist/assets/background.png")
+		p := pathUtils.Data("background.png") // 用户数据落数据根(exe 只读也能传)
 		log.Println(p)
 		if err := ctx.SaveUploadedFile(file, p); err != nil {
 			abort500f(ctx, err)

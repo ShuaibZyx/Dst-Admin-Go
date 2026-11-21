@@ -98,7 +98,12 @@ func (s *SubscriptionApi) Add(ctx *gin.Context) {
 // Detail GET /api/mod/subscription/detail/:id — 工坊实时详情 + 本地文件信息 + 各世界启用情况
 func (s *SubscriptionApi) Detail(ctx *gin.Context) {
 	modid := ctx.Param("id")
-	data := service.GetSubscriptionDetail(modid)
+	data, err := service.GetSubscriptionDetail(modid)
+	if err != nil {
+		// 连不上 Steam 时要给明确的失败响应，不能像以前那样挂 1~2 分钟后回 200 + 空数据
+		ctx.JSON(http.StatusOK, vo.Response{Code: 500, Msg: "获取创意工坊详情失败: " + err.Error()})
+		return
+	}
 	data["enabledWorlds"] = enabledWorldsFor(clusterUtilsFromCtx(ctx), modid)
 	ctx.JSON(http.StatusOK, vo.Response{Code: 200, Msg: "success", Data: data})
 }

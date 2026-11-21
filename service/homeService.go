@@ -3,6 +3,7 @@ package service
 import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo/level"
 	"github.com/go-ini/ini"
 	"log"
@@ -11,12 +12,26 @@ import (
 
 type HomeService struct{}
 
+// 模板位于资源根(惰性解析:资源根依赖运行期判定,init 固化会找错目录)
 const (
-	ClusterIniTemplate      = "./static/template/cluster2.ini"
-	MasterServerIniTemplate = "./static/template/master_server.ini"
-	CavesServerIniTemplate  = "./static/template/caves_server.ini"
-	ServerIniTemplate       = "./static/template/server.ini"
+	ClusterIniTemplateName      = "cluster2.ini"
+	MasterServerIniTemplateName = "master_server.ini"
+	CavesServerIniTemplateName  = "caves_server.ini"
+	ServerIniTemplateName       = "server.ini"
 )
+
+func ClusterIniTemplate() string {
+	return pathUtils.Res("static", "template", ClusterIniTemplateName)
+}
+func MasterServerIniTemplate() string {
+	return pathUtils.Res("static", "template", MasterServerIniTemplateName)
+}
+func CavesServerIniTemplate() string {
+	return pathUtils.Res("static", "template", CavesServerIniTemplateName)
+}
+func ServerIniTemplate() string {
+	return pathUtils.Res("static", "template", ServerIniTemplateName)
+}
 
 func (c *HomeService) GetClusterIni(clusterName string) *level.ClusterIni {
 	newCluster := level.NewClusterIni()
@@ -228,7 +243,7 @@ func (c *HomeService) SaveClusterToken(clusterName, token string) {
 
 func (c *HomeService) SaveClusterIni(clusterName string, cluster *level.ClusterIni) {
 	clusterIniPath := dstUtils.GetClusterIniPath(clusterName)
-	fileUtils.WriterTXT(clusterIniPath, dstUtils.ParseTemplate2(ClusterIniTemplate, cluster))
+	fileUtils.WriterTXT(clusterIniPath, dstUtils.ParseTemplate2(ClusterIniTemplate(), cluster))
 }
 
 func (c *HomeService) SaveAdminlist(clusterName string, str []string) {
@@ -281,7 +296,7 @@ func (c *HomeService) SaveMasterWorld(clusterName string, world *level.World) {
 	fileUtils.WriterTXT(lPath, world.Leveldataoverride)
 	fileUtils.WriterTXT(mPath, world.Modoverrides)
 
-	serverBuf := dstUtils.ParseTemplate(MasterServerIniTemplate, world.ServerIni)
+	serverBuf := dstUtils.ParseTemplate(MasterServerIniTemplate(), world.ServerIni)
 
 	fileUtils.WriterTXT(sPath, serverBuf)
 }
@@ -299,7 +314,7 @@ func (c *HomeService) SaveCavesWorld(clusterName string, world *level.World) {
 	fileUtils.WriterTXT(lPath, world.Leveldataoverride)
 	fileUtils.WriterTXT(mPath, world.Modoverrides)
 
-	serverBuf := dstUtils.ParseTemplate(CavesServerIniTemplate, world.ServerIni)
+	serverBuf := dstUtils.ParseTemplate(CavesServerIniTemplate(), world.ServerIni)
 
 	fileUtils.WriterTXT(sPath, serverBuf)
 }
@@ -330,7 +345,7 @@ func (c *HomeService) SaveLevel(clusterName string, levelName string, world *lev
 	fileUtils.WriterTXT(lPath, world.Leveldataoverride)
 	fileUtils.WriterTXT(mPath, world.Modoverrides)
 
-	serverBuf := dstUtils.ParseTemplate(ServerIniTemplate, world.ServerIni)
+	serverBuf := dstUtils.ParseTemplate(ServerIniTemplate(), world.ServerIni)
 
 	fileUtils.WriterTXT(sPath, serverBuf)
 

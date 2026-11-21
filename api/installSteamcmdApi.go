@@ -7,6 +7,7 @@ import (
 	"dst-admin-go/service/autoCheck"
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/dstUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/utils/shellUtils"
 	"dst-admin-go/utils/systemUtils"
 	"errors"
@@ -180,7 +181,7 @@ func installCmd(eventCh chan string, stopCh chan string) error {
 	eventCh <- "data: 正在安装steamcmd。。。\n\n"
 
 	// 直接调用脚本安装
-	scriptPath := "./static/script/install_steamcmd.sh"
+	scriptPath := pathUtils.Res("static", "script", "install_steamcmd.sh")
 	shellUtils.Chmod(scriptPath)
 	err := commandShell(eventCh, scriptPath, consts.HomePath, consts.HomePath)
 	if err != nil {

@@ -12,12 +12,39 @@ import (
 	"errors"
 	"log"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 )
+
+// steamHTTPClient 复用连接并带全链路超时。
+// 此前是裸的 &http.Client{Transport: &http.Transport{TLSClientConfig: ...}}：没有 Dial/TLS/
+// 响应头/总超时，一旦连到不可达的 Akamai IP 就一路挂到 OS TCP 超时（实测单次 55s~2m31s），
+// 前端表现就是「接口不响应」。Proxy 走环境变量，网络受限时可挂代理。
+var steamHTTPClient = &http.Client{
+	Timeout: 40 * time.Second,
+	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		// 非 http.DefaultTransport 的 Transport 默认不做 HTTP/2，显式开启
+		ForceAttemptHTTP2:     true,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true}, // 忽略证书验证
+		DialContext:           (&net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   8 * time.Second,
+		// 命中黑洞 IP 时 TCP/TLS 都能连上但收不到响应头，就靠这里掐断。
+		// 单次成功实测 1~5s，12s 留足余量（再短会误伤批量请求）
+		ResponseHeaderTimeout: 12 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	},
+}
+
+// steamAttempts Steam API 的网络是间歇性的：同一域名背后多个 Akamai IP，部分不通
+// （实测 curl 8/8 成功且全落在 .192/.156；Go 命中的 .136/.142/.152 全超时）。
+// 每次重试重新拨号，多数能落到可用 IP。
+const steamAttempts = 3
 
 type Publishedfiledetail struct {
 	Publishedfileid string  `json:"publishedfileid"`
@@ -63,55 +90,51 @@ type PublishedFileDetailsDataGet struct {
 
 func GetPublishedFileDetails(workshopIds []string) ([]Publishedfiledetail, error) {
 	url := "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
-	log.Println(url)
 	method := "POST"
 
-	payload := &bytes.Buffer{}
-	writer := multipart.NewWriter(payload)
+	var lastErr error
+	for attempt := 1; attempt <= steamAttempts; attempt++ {
+		// 每次重试都要重建 multipart body：POST body 是一次性流，复用会读到空
+		payload := &bytes.Buffer{}
+		writer := multipart.NewWriter(payload)
+		_ = writer.WriteField("itemcount", strconv.Itoa(len(workshopIds)))
+		for i := range workshopIds {
+			_ = writer.WriteField("publishedfileids["+strconv.Itoa(i)+"]", workshopIds[i])
+		}
+		if err := writer.Close(); err != nil {
+			log.Println(err)
+			return nil, err
+		}
 
-	_ = writer.WriteField("itemcount", strconv.Itoa(len(workshopIds)))
+		req, err := http.NewRequest(method, url, payload)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	for i := range workshopIds {
-		_ = writer.WriteField("publishedfileids["+strconv.Itoa(i)+"]", workshopIds[i])
-	}
+		res, err := steamHTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+			log.Printf("Steam API 第 %d/%d 次失败: %v", attempt, steamAttempts, err)
+			continue
+		}
 
-	err := writer.Close()
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
+		var publishedFileDetailsData PublishedFileDetailsData
+		err = json.NewDecoder(res.Body).Decode(&publishedFileDetailsData)
+		res.Body.Close()
+		if err != nil {
+			lastErr = err
+			log.Printf("Steam API 第 %d/%d 次解码失败: %v", attempt, steamAttempts, err)
+			continue
+		}
 
-	// 创建支持TLS的http.Client
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // 忽略证书验证
+		if publishedFileDetailsData.Response.Result == 1 {
+			return publishedFileDetailsData.Response.Publishedfiledetails, nil
+		}
+		lastErr = errors.New("请求失败")
 	}
-	// 发送请求
-	client := &http.Client{Transport: tr}
-	req, err := http.NewRequest(method, url, payload)
-
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	res, err := client.Do(req)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	var publishedFileDetailsData PublishedFileDetailsData
-	err = json.NewDecoder(res.Body).Decode(&publishedFileDetailsData)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
-	if publishedFileDetailsData.Response.Result == 1 {
-		return publishedFileDetailsData.Response.Publishedfiledetails, nil
-	}
-	return nil, errors.New("请求失败")
+	return nil, lastErr
 }
 
 func GetPublishedFileDetailsBatched(workshopIds []string, batchSize int) ([]Publishedfiledetail, error) {
@@ -141,7 +164,8 @@ func GetPublishedFileDetailsBatched(workshopIds []string, batchSize int) ([]Publ
 }
 
 func GetPublishedFileDetailsWithGet(workshopIds []string) ([]Publishedfiledetail, error) {
-	urlStr := "http://api.steampowered.com/IPublishedFileService/GetDetails/v1/"
+	// 必须 https：API key 在查询串里，明文 http 会把它直接暴露在网络上
+	urlStr := "https://api.steampowered.com/IPublishedFileService/GetDetails/v1/"
 	data := url.Values{}
 	data.Set("key", global.SteamAPIKey())
 	data.Set("language", "6")
@@ -150,23 +174,31 @@ func GetPublishedFileDetailsWithGet(workshopIds []string) ([]Publishedfiledetail
 	}
 	urlStr = urlStr + "?" + data.Encode()
 
-	req, err := http.NewRequest("GET", urlStr, nil)
-	client := &http.Client{}
-	res, err := client.Do(req)
-	if err != nil {
-		log.Println(err)
-		return nil, err
-	}
-	defer res.Body.Close()
+	var lastErr error
+	for attempt := 1; attempt <= steamAttempts; attempt++ {
+		req, err := http.NewRequest("GET", urlStr, nil)
+		if err != nil {
+			log.Println(err)
+			return nil, err
+		}
+		res, err := steamHTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+			log.Printf("Steam API(GET) 第 %d/%d 次失败: %v", attempt, steamAttempts, err)
+			continue
+		}
 
-	var publishedFileDetailsData PublishedFileDetailsDataGet
-	err = json.NewDecoder(res.Body).Decode(&publishedFileDetailsData)
-	if err != nil {
-		log.Println(err)
-		return nil, err
+		var publishedFileDetailsData PublishedFileDetailsDataGet
+		err = json.NewDecoder(res.Body).Decode(&publishedFileDetailsData)
+		res.Body.Close()
+		if err != nil {
+			lastErr = err
+			log.Printf("Steam API(GET) 第 %d/%d 次解码失败: %v", attempt, steamAttempts, err)
+			continue
+		}
+		return publishedFileDetailsData.Response.Publishedfiledetails, nil
 	}
-	return publishedFileDetailsData.Response.Publishedfiledetails, nil
-	// return nil, errors.New("请求失败")
+	return nil, lastErr
 }
 
 // GetModModinfoLua TODO 获取模组 modinfo.lua

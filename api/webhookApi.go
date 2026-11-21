@@ -3,6 +3,7 @@ package api
 import (
 	"dst-admin-go/utils/dstConfigUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -33,8 +34,9 @@ type Body struct {
 
 func verifyKey(key string, ctx *gin.Context) bool {
 
-	keyPath := "./key"
-	fileUtils.CreateFileIfNotExists(key)
+	keyPath := pathUtils.Data("key") // webhook 密钥文件(数据根,惰性解析)
+	// 不自动建 key 文件:缺失即拒绝(旧行为 CreateFileIfNotExists(key) 是笔误,
+	// 会拿密钥值当文件名在 CWD 造垃圾文件且把密钥泄露进文件名)
 	content, err := fileUtils.ReadFile(keyPath)
 	content = strings.Replace(content, "\n", "", -1)
 	log.Println("key: ", key)

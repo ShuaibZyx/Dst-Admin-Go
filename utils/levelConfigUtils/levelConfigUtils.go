@@ -3,6 +3,7 @@ package levelConfigUtils
 import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo/level"
 	"encoding/json"
 	"log"
@@ -31,7 +32,7 @@ func initLevel(levelFolderPath string, level *level.World) {
 
 	fileUtils.WriterTXT(lPath, level.Leveldataoverride)
 	fileUtils.WriterTXT(mPath, level.Modoverrides)
-	serverBuf := dstUtils.ParseTemplate("./static/template/server.ini", level.ServerIni)
+	serverBuf := dstUtils.ParseTemplate(pathUtils.Res("static", "template", "server.ini"), level.ServerIni)
 	fileUtils.WriterTXT(sPath, serverBuf)
 }
 

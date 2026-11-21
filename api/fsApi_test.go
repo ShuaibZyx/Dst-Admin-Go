@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -189,5 +190,37 @@ func TestOpenTarget(t *testing.T) {
 	}
 	if dir, sel := openTarget(zip); dir != base || sel != zip {
 		t.Fatalf("备份应定位所在目录: dir=%q sel=%q", dir, sel)
+	}
+}
+
+// headlessBlockMsg 无头环境(Docker/SSH)必须返回阻断原因,不能起 xdg-open 报 500
+func TestHeadlessBlockMsg(t *testing.T) {
+	oldDisplay, hadDisplay := os.LookupEnv("DISPLAY")
+	oldWayland, hadWayland := os.LookupEnv("WAYLAND_DISPLAY")
+	t.Cleanup(func() {
+		if hadDisplay {
+			_ = os.Setenv("DISPLAY", oldDisplay)
+		} else {
+			_ = os.Unsetenv("DISPLAY")
+		}
+		if hadWayland {
+			_ = os.Setenv("WAYLAND_DISPLAY", oldWayland)
+		} else {
+			_ = os.Unsetenv("WAYLAND_DISPLAY")
+		}
+	})
+
+	_ = os.Unsetenv("DISPLAY")
+	_ = os.Unsetenv("WAYLAND_DISPLAY")
+	if msg := headlessBlockMsg(); msg == "" {
+		t.Fatal("DISPLAY/WAYLAND_DISPLAY 均为空时应判定无头并返回提示")
+	}
+
+	// 有显示服务但 xdg-open 缺失(Linux 无头镜像常见)也要拦
+	_ = os.Setenv("DISPLAY", ":0")
+	if _, err := exec.LookPath("xdg-open"); err != nil {
+		if msg := headlessBlockMsg(); msg == "" {
+			t.Fatal("xdg-open 不在 PATH 时应返回提示而非起进程报 500")
+		}
 	}
 }

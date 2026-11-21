@@ -1,6 +1,7 @@
 package router
 
 import (
+	"dst-admin-go/utils/pathUtils"
 	"os"
 	"path/filepath"
 
@@ -14,7 +15,7 @@ func distStaticExists(urlPath string) bool {
 	if len(rel) > 0 && (rel[0] == '/' || rel[0] == '\\') {
 		rel = rel[1:]
 	}
-	_, err := os.Stat(filepath.Join("dist", filepath.Clean(rel)))
+	_, err := os.Stat(pathUtils.Res("dist", filepath.Clean(rel)))
 	return err == nil
 }
 
@@ -39,14 +40,14 @@ func initStaticFile(app *gin.Engine) {
 	// 注意：不要在此函数前部使用 LoadHTMLGlob 等会 panic 的注册——
 	// dist 缺失时 panic 被上方 recover 吞掉，会导致后续路由全部丢失（/ 404）
 	// 入口 index.html 由下方 StaticFile 原样下发，无需模板引擎
-	app.Static("/assets", "./dist/assets")
-	app.Static("/misc", "./dist/misc")
-	app.Static("/static/js", "./dist/static/js")                         // 添加资源路径
-	app.Static("/static/css", "./dist/static/css")                       // 添加资源路径
-	app.Static("/static/img", "./dist/static/img")                       // 添加资源路径
-	app.Static("/static/fonts", "./dist/static/fonts")                   // 添加资源路径
-	app.Static("/static/media", "./dist/static/media")                   // 添加资源路径
-	app.StaticFile("/favicon.ico", "./dist/favicon.ico")                 // 添加资源路径
-	app.StaticFile("/asset-manifest.json", "./dist/asset-manifest.json") // 添加资源路径
-	app.StaticFile("/", "./dist/index.html")
+	app.Static("/assets", pathUtils.Res("dist", "assets"))
+	app.Static("/misc", pathUtils.Res("dist", "misc"))
+	app.Static("/static/js", pathUtils.Res("dist", "static", "js"))                         // 添加资源路径
+	app.Static("/static/css", pathUtils.Res("dist", "static", "css"))                       // 添加资源路径
+	app.Static("/static/img", pathUtils.Res("dist", "static", "img"))                       // 添加资源路径
+	app.Static("/static/fonts", pathUtils.Res("dist", "static", "fonts"))                   // 添加资源路径
+	app.Static("/static/media", pathUtils.Res("dist", "static", "media"))                   // 添加资源路径
+	app.StaticFile("/favicon.ico", pathUtils.Res("dist", "favicon.ico"))                    // 添加资源路径
+	app.StaticFile("/asset-manifest.json", pathUtils.Res("dist", "asset-manifest.json"))    // 添加资源路径
+	app.StaticFile("/", pathUtils.Res("dist", "index.html"))
 }

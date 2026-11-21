@@ -5,6 +5,7 @@ import (
 	"dst-admin-go/utils/dstUtils"
 	"dst-admin-go/utils/fileUtils"
 	"dst-admin-go/utils/levelConfigUtils"
+	"dst-admin-go/utils/pathUtils"
 	"dst-admin-go/vo"
 	"log"
 	"path"
@@ -13,9 +14,10 @@ import (
 	"strings"
 )
 
-var cluster_init_template = "./static/template/cluster2.ini"
-var master_server_init_template = "./static/template/master_server.ini"
-var caves_server_init_template = "./static/template/caves_server.ini"
+// 模板位于资源根(惰性解析,见 pathUtils.ResRoot)
+var cluster_init_template = func() string { return pathUtils.Res("static", "template", "cluster2.ini") }
+var master_server_init_template = func() string { return pathUtils.Res("static", "template", "master_server.ini") }
+var caves_server_init_template = func() string { return pathUtils.Res("static", "template", "caves_server.ini") }
 
 type GameConfigService struct {
 	w HomeService
@@ -182,7 +184,7 @@ func (c *GameConfigService) createClusterIni(clusterName string, gameConfigVo vo
 	oldCluster.PauseWhenNobody = gameConfigVo.PauseWhenNobody
 	oldCluster.ClusterPassword = gameConfigVo.ClusterPassword
 
-	clusterIni := dstUtils.ParseTemplate(cluster_init_template, oldCluster)
+	clusterIni := dstUtils.ParseTemplate(cluster_init_template(), oldCluster)
 	fileUtils.WriterTXT(clusterIniPath, clusterIni)
 }
 
